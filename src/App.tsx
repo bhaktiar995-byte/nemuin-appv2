@@ -17,11 +17,13 @@ import { AddFormsScreen } from './components/AddFormsScreen';
 import { ProfileScreen } from './components/ProfileScreen';
 import { SpinWheelScreen } from './components/SpinWheelScreen';
 import { SettingsScreen } from './components/SettingsScreen';
+import { LoginScreen } from './components/LoginScreen';
 import { Restaurant, FoodPost, calculateDistance } from './data/mock';
 
 type ViewMode = 'map' | 'list' | 'detail' | 'chat' | 'order' | 'feed' | 'create_menu' | 'create_resto' | 'create_post' | 'profile' | 'spin' | 'settings';
 
 export default function App() {
+  const [currentUser, setCurrentUser] = useState<{ email: string; role: 'user' | 'admin' } | null>(null);
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [posts, setPosts] = useState<FoodPost[]>([]);
   const [loading, setLoading] = useState(true);
@@ -151,6 +153,101 @@ export default function App() {
     }
   };
 
+  const [isSeeding, setIsSeeding] = useState(false);
+
+  const handleSeedFeed = async () => {
+    setIsSeeding(true);
+    try {
+      const postsToInsert = [
+        {
+          author: "Ahmad_Foodie",
+          user_avatar: "https://images.unsplash.com/photo-1599566150163-29194dcaad36?auto=format&fit=crop&q=80&w=100",
+          content: "Nemu hidden gem nasi goreng rempah porsi kuli di daerah Merjosari! Rempahnya beneran kerasa dan irisan dagingnya nggak pelit. Mantap pol buat makan malam abis nugas! 🤤🍛",
+          image: "https://images.unsplash.com/photo-1603133872878-684f208fb84b?auto=format&fit=crop&q=80&w=800",
+          likes: 124,
+          comments: 18,
+          date: "2 jam yang lalu",
+          location: "Nasi Goreng Rempah Jaya"
+        },
+        {
+          author: "Siti Kulinery",
+          user_avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=100",
+          content: "Cuaca Malang lagi dingin enaknya ngebakso. Kuah kaldu Sengkaling ini beneran the best sih, anget dan gurihnya pas. Tahu baksonya juara! 🍜✨",
+          image: "https://images.unsplash.com/photo-1634261899147-ece64a8523c0?auto=format&fit=crop&q=80&w=800",
+          likes: 89,
+          comments: 5,
+          date: "5 jam yang lalu",
+          location: "Bakso Sengkaling"
+        }
+      ];
+
+      // Insert posts schema: table is 'posts' with columns: author, user_avatar, content, image, likes, comments, date, location
+      const { error: seedError } = await supabase.from('posts').insert(postsToInsert);
+      if (seedError) throw seedError;
+
+      // Seed standard restaurants as well if empty so that the whole app has data!
+      const { data: currentRestos } = await supabase.from('restaurants').select('id');
+      if (!currentRestos || currentRestos.length === 0) {
+        const restosToInsert = [
+          {
+            name: "Ayam Bawang Cak Per",
+            type: "Lalapan",
+            food_categories: ["Indonesian", "Ayam", "Sambal", "Lalapan"],
+            rating: 4.8,
+            review_count: 342,
+            price_range: "Rp 15.000 - Rp 35.000",
+            address: "Jl. Raya Tlogomas No.12, Malang (Dekat Kampus 3 UMM)",
+            phone: "0812-3456-7890",
+            hours: "09:00 - 22:00",
+            image: "https://images.unsplash.com/photo-1549488344-c1fb6724b07f?auto=format&fit=crop&q=80&w=800",
+            lat: -7.921500,
+            lng: 112.598000,
+            is_available_online: true
+          },
+          {
+            name: "Bakso Sengkaling",
+            type: "Bakso",
+            food_categories: ["Indonesian", "Soup", "Meatball", "Bakso"],
+            rating: 4.6,
+            review_count: 521,
+            price_range: "Rp 12.000 - Rp 25.000",
+            address: "Jl. Raya Sengkaling, Malang",
+            phone: "0822-9876-5432",
+            hours: "10:00 - 21:00",
+            image: "https://images.unsplash.com/photo-1533622597524-a1215e26c0a2?auto=format&fit=crop&q=80&w=800",
+            lat: -7.918000,
+            lng: 112.601000,
+            is_available_online: false
+          }
+        ];
+
+        for (const item of restosToInsert) {
+          const { data: insertedResto, error: rErr } = await supabase.from('restaurants').insert(item).select('id').single();
+          if (!rErr && insertedResto) {
+            const menuToInsert = [
+              {
+                restaurant_id: insertedResto.id,
+                name: item.type === "Bakso" ? "Bakso Campur" : "Paket Ayam Bawang",
+                price: item.type === "Bakso" ? 18000 : 22000,
+                image: item.image,
+                description: "Menu lezat khas daerah",
+                category: "Main Course"
+              }
+            ];
+            await supabase.from('menu_items').insert(menuToInsert);
+          }
+        }
+      }
+
+      await fetchRestaurants();
+    } catch (err: any) {
+      console.error("Seeding error:", err);
+      alert("Gagal melakukan seeding: " + (err.message || err.details || "Pastikan RLS table posts & restaurants dinonaktifkan / diset public anon insert."));
+    } finally {
+      setIsSeeding(false);
+    }
+  };
+
   useEffect(() => {
     fetchRestaurants();
   }, []);
@@ -159,6 +256,47 @@ export default function App() {
   const handleUpdateRestaurant = (updated: Restaurant) => {
     setRestaurants(prev => prev.map(r => r.id === updated.id ? updated : r));
     setSelectedRestaurant(updated);
+  };
+
+  const handleDeleteRestaurant = async (restaurantId: string) => {
+    if (!isSupabaseConfigured) return;
+    try {
+      console.log("Deleting menu items for restaurant_id:", restaurantId);
+      const { error: menuError } = await supabase
+        .from('menu_items')
+        .delete()
+        .eq('restaurant_id', restaurantId);
+      if (menuError) {
+        console.error("Error deleting menu items from Supabase:", menuError);
+      }
+
+      console.log("Deleting reviews for restaurant_id:", restaurantId);
+      const { error: reviewsError } = await supabase
+        .from('reviews')
+        .delete()
+        .eq('restaurant_id', restaurantId);
+      if (reviewsError) {
+        console.error("Error deleting reviews from Supabase:", reviewsError);
+      }
+
+      console.log("Deleting restaurant of id:", restaurantId);
+      const { error: restoError } = await supabase
+        .from('restaurants')
+        .delete()
+        .eq('id', restaurantId);
+
+      if (restoError) {
+        throw restoError;
+      }
+
+      console.log("Restaurant deleted successfully");
+      setIsDetailModalOpen(false);
+      setView('list');
+      await fetchRestaurants();
+    } catch (err: any) {
+      console.error("Supabase Delete Error:", err);
+      alert("Gagal menghapus tempat kuliner: " + (err.message || "Pastikan policy delete Supabase diizinkan/publik."));
+    }
   };
 
   const handleSelectRestaurant = (restaurant: Restaurant, from: 'map' | 'list') => {
@@ -207,6 +345,8 @@ export default function App() {
             </ol>
           </div>
         </div>
+      ) : !currentUser ? (
+        <LoginScreen onLogin={(role, email) => setCurrentUser({ role, email })} isDarkMode={isDarkMode} />
       ) : (
         <>
           {/* Top Global Header (Dynamic based on View) */}
@@ -289,6 +429,16 @@ export default function App() {
 
             {/* Desktop Only Profile Button */}
             <div className="hidden md:flex items-center gap-3">
+              {currentUser && (
+                <div className={`px-3 py-1.5 rounded-xl border text-[9px] font-black tracking-wider flex items-center gap-1.5 shadow-sm uppercase ${
+                  currentUser.role === 'admin' 
+                    ? 'bg-rose-500/10 border-rose-500/25 text-rose-500' 
+                    : 'bg-emerald-500/10 border-emerald-500/25 text-emerald-500'
+                }`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${currentUser.role === 'admin' ? 'bg-rose-500' : 'bg-emerald-500'}`}></span>
+                  <span>{currentUser.role === 'admin' ? 'Curator (Admin)' : 'Pencinta Kuliner (User)'}</span>
+                </div>
+              )}
               {view !== 'map' && (
                 <button
                   onClick={() => setView('profile')}
@@ -299,6 +449,7 @@ export default function App() {
                         ? 'bg-[#262626] border-[#404040] text-[#A8A29E] hover:text-[#FF611D]'
                         : 'bg-white border-[#E7E5E4] text-[#78716C] hover:text-[#FF611D]'
                   }`}
+                  title="Lihat Profil"
                 >
                   <User className="w-5 h-5" />
                 </button>
@@ -395,6 +546,7 @@ export default function App() {
                 onBack={() => setView(prevView)} 
                 onChat={() => setView('chat')}
                 onUpdateRestaurant={handleUpdateRestaurant}
+                onDeleteRestaurant={currentUser?.role === 'admin' ? handleDeleteRestaurant : undefined}
                 userLocation={userLocation}
                 isDarkMode={isDarkMode}
               />
@@ -419,13 +571,19 @@ export default function App() {
               />
             )}
             {view === 'feed' && (
-              <FeedScreen posts={posts} isDarkMode={isDarkMode} />
+              <FeedScreen 
+                posts={posts} 
+                isDarkMode={isDarkMode} 
+                onSeed={handleSeedFeed}
+                isSeeding={isSeeding}
+              />
             )}
             {view === 'create_menu' && (
               <CreateMenuScreen 
                 onSelect={(action) => setView(action === 'add_resto' ? 'create_resto' : 'create_post')} 
                 onBack={() => setView(prevView)} 
                 isDarkMode={isDarkMode}
+                isAdmin={currentUser?.role === 'admin'}
               />
             )}
             {view === 'create_resto' && (
@@ -454,6 +612,12 @@ export default function App() {
               <ProfileScreen 
                 isDarkMode={isDarkMode} 
                 onBack={() => setView(prevView)}
+                userRole={currentUser?.role}
+                userEmail={currentUser?.email}
+                onLogout={() => {
+                  setCurrentUser(null);
+                  setView('list');
+                }}
               />
             )}
             {view === 'settings' && (
@@ -595,6 +759,7 @@ export default function App() {
                   onBack={() => setIsDetailModalOpen(false)} 
                   onChat={() => { setIsDetailModalOpen(false); setView('chat'); }}
                   onUpdateRestaurant={handleUpdateRestaurant}
+                  onDeleteRestaurant={currentUser?.role === 'admin' ? handleDeleteRestaurant : undefined}
                   userLocation={userLocation}
                   isDarkMode={isDarkMode}
                 />

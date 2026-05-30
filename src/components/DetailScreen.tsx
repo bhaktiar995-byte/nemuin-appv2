@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ChevronLeft, MapPin, Clock, Phone, Star, Share, Heart, MessageCircle, X, ThumbsUp } from 'lucide-react';
+import { ChevronLeft, MapPin, Clock, Phone, Star, Share, Heart, MessageCircle, X, ThumbsUp, Trash2 } from 'lucide-react';
 import { Restaurant, MenuItem, calculateDistance } from '../data/mock';
 import { MapContainer, TileLayer, Marker, useMap } from 'react-leaflet';
 import L from 'leaflet';
@@ -25,6 +25,7 @@ interface DetailScreenProps {
   onBack: () => void;
   onChat: () => void;
   onUpdateRestaurant?: (updated: Restaurant) => void;
+  onDeleteRestaurant?: (restaurantId: string) => Promise<void>;
   userLocation?: [number, number] | null;
   isDarkMode?: boolean;
 }
@@ -40,8 +41,10 @@ function DetailMapResizer() {
   return null;
 }
 
-export function DetailScreen({ restaurant, onBack, onChat, onUpdateRestaurant, userLocation, isDarkMode }: DetailScreenProps) {
+export function DetailScreen({ restaurant, onBack, onChat, onUpdateRestaurant, onDeleteRestaurant, userLocation, isDarkMode }: DetailScreenProps) {
   const [localMenu, setLocalMenu] = useState(restaurant.menu);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   
   // Calculate average rating from menu items
   const menuRatings = localMenu.filter(m => m.rating !== undefined).map(m => m.rating!);
@@ -112,24 +115,25 @@ export function DetailScreen({ restaurant, onBack, onChat, onUpdateRestaurant, u
           >
             <ChevronLeft className="w-8 h-8" />
           </button>
-
-          <button 
-            onClick={onBack}
-            className="w-12 h-12 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center text-white hover:bg-[#FF611D] transition-all hover:scale-110 active:scale-95 shadow-lg border border-white/20"
-            title="Tutup"
-          >
-            <X className="w-8 h-8" />
-          </button>
         </div>
 
         {/* Improved Actions overlay */}
         <div className="absolute bottom-10 right-6 z-[30] flex flex-col gap-3">
-          <button className="w-14 h-14 bg-white/20 backdrop-blur-md rounded-[1.25rem] flex items-center justify-center text-white hover:bg-[#FF611D] transition-all hover:scale-110 active:scale-90 shadow-xl border border-white/20">
+          <button className="w-14 h-14 bg-white/20 backdrop-blur-md rounded-[1.25rem] flex items-center justify-center text-white hover:bg-[#FF611D] transition-all hover:scale-110 active:scale-90 shadow-xl border border-white/20 border-white/20" title="Bagikan">
             <Share className="w-6 h-6" />
           </button>
-          <button className="w-14 h-14 bg-white/20 backdrop-blur-md rounded-[1.25rem] flex items-center justify-center text-white hover:bg-[#FF611D] transition-all hover:scale-110 active:scale-90 shadow-xl border border-white/20">
+          <button className="w-14 h-14 bg-white/20 backdrop-blur-md rounded-[1.25rem] flex items-center justify-center text-white hover:bg-[#FF611D] transition-all hover:scale-110 active:scale-90 shadow-xl border border-white/20 border-white/20" title="Suka">
             <Heart className="w-6 h-6" />
           </button>
+          {onDeleteRestaurant && (
+            <button 
+              onClick={() => setShowDeleteConfirm(true)}
+              className="w-14 h-14 bg-rose-500/80 backdrop-blur-md rounded-[1.25rem] flex items-center justify-center text-white hover:bg-rose-600 transition-all hover:scale-110 active:scale-90 shadow-xl border border-rose-400/20"
+              title="Hapus Tempat ini"
+            >
+              <Trash2 className="w-6 h-6" />
+            </button>
+          )}
         </div>
 
         {/* Title overlay */}
@@ -276,6 +280,54 @@ export function DetailScreen({ restaurant, onBack, onChat, onUpdateRestaurant, u
           ))}
         </div>
       </div>
+
+      {/* Custom Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-[500] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setShowDeleteConfirm(false)} />
+          <div className={`relative w-full max-w-sm rounded-[2.5rem] p-8 overflow-hidden shadow-2xl border animate-in zoom-in-95 duration-300 ${isDarkMode ? 'bg-[#1C1917] border-[#404040] text-white' : 'bg-white border-[#E7E5E4] text-[#4B2E2A]'}`}>
+            <div className="text-center space-y-6">
+              <div className="w-16 h-16 bg-rose-100 rounded-full flex items-center justify-center mx-auto text-rose-500">
+                <Trash2 className="w-8 h-8" />
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-xl font-black italic tracking-tighter text-rose-500">Hapus Tempat Kuliner</h3>
+                <p className={`text-sm font-bold leading-relaxed ${isDarkMode ? 'text-[#A8A29E]' : 'text-[#78716C]'}`}>
+                  Apakah Anda yakin ingin menghapus <span className="text-[#FF611D]">{restaurant.name}</span>? Semua data menu terkait juga akan terhapus.
+                </p>
+              </div>
+              <div className="flex gap-3 pt-2 animate-in slide-in-from-bottom duration-300">
+                <button 
+                  onClick={() => setShowDeleteConfirm(false)}
+                  disabled={isDeleting}
+                  className={`flex-1 h-12 rounded-xl text-xs font-black italic tracking-tighter transition-all ${isDarkMode ? 'bg-[#333333] hover:bg-[#404040]' : 'bg-[#F6F1EA] hover:bg-[#E7E5E4]'}`}
+                >
+                  BATAL
+                </button>
+                <button 
+                  onClick={async () => {
+                    setIsDeleting(true);
+                    try {
+                      if (onDeleteRestaurant) {
+                        await onDeleteRestaurant(restaurant.id);
+                      }
+                    } catch (e) {
+                      console.error("Gagal saat menghapus:", e);
+                    } finally {
+                      setIsDeleting(false);
+                      setShowDeleteConfirm(false);
+                    }
+                  }}
+                  disabled={isDeleting}
+                  className="flex-1 h-12 bg-rose-500 text-white rounded-xl text-xs font-black italic tracking-tighter hover:bg-rose-600 transition-all flex items-center justify-center gap-2"
+                >
+                  {isDeleting ? 'MENGHAPUS...' : 'YA, HAPUS'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
