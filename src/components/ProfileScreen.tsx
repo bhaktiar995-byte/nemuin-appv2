@@ -5,19 +5,24 @@ import { motion, AnimatePresence } from 'motion/react';
 interface ProfileScreenProps {
   isDarkMode?: boolean;
   onBack?: () => void;
+  userRole?: 'user' | 'admin';
+  userEmail?: string;
+  onLogout?: () => void;
 }
 
-export function ProfileScreen({ isDarkMode, onBack }: ProfileScreenProps) {
+export function ProfileScreen({ isDarkMode, onBack, userRole = 'user', userEmail = 'user@nemuin.com', onLogout }: ProfileScreenProps) {
   const [activeSubView, setActiveSubView] = useState<'profile' | 'edit' | 'subscription' | 'account' | 'ad_options' | 'ad_settings'>('profile');
-  const [currentTier, setCurrentTier] = useState<'free' | 'lite' | 'pro' | 'business'>('free');
+  const [currentTier, setCurrentTier] = useState<'free' | 'lite' | 'pro' | 'business'>(userRole === 'admin' ? 'pro' : 'free');
   
   // Edit Profile State
   const [profileData, setProfileData] = useState({
-    name: 'Surya Firdaus',
-    bio: 'Pecinta kuliner tersembunyi yang suka berbagi pengalaman rasa.',
+    name: userRole === 'admin' ? 'Surya Firdaus (Admin)' : 'Surya Firdaus',
+    bio: userRole === 'admin' 
+      ? 'Administrator Utama Nemuin. Mengurasi dan mengelola direktori kuliner Malang.' 
+      : 'Pecinta kuliner tersembunyi yang suka berbagi pengalaman rasa.',
     location: 'Malang',
-    level: 'Local Guide Level 4',
-    email: 'surya.firdaus@example.com',
+    level: userRole === 'admin' ? 'Chief Curator / Admin' : 'Local Guide Level 4',
+    email: userEmail,
     phone: '+62 812 3456 7890',
     joinDate: '12 Januari 2024'
   });
@@ -543,7 +548,7 @@ export function ProfileScreen({ isDarkMode, onBack }: ProfileScreenProps) {
               { icon: Heart, label: 'Koleksi Tersimpan', color: 'text-rose-500', action: () => {} },
               { icon: MessageSquare, label: 'Ulasan Anda', color: 'text-blue-500', action: () => {} },
               { icon: Crown, label: 'Langganan Iklan', color: 'text-[#FF611D]', action: () => setActiveSubView('ad_options') },
-              { icon: LogOut, label: 'Keluar', color: 'text-rose-600', action: () => {} },
+              { icon: LogOut, label: 'Keluar', color: 'text-rose-600', action: () => { if (onLogout) onLogout(); } },
             ].map((item, idx) => (
               <button 
                 key={idx} 
