@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Shield, User as UserIcon, Lock, Eye, EyeOff, UtensilsCrossed, AlertCircle, ArrowRight, CheckCircle, UserPlus, LogIn, Check } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
 
 interface LoginScreenProps {
   onLogin: (role: 'user' | 'admin', email: string) => void;
@@ -35,6 +36,31 @@ export function LoginScreen({ onLogin, isDarkMode }: LoginScreenProps) {
     const inputEmail = email.trim();
     const inputPassword = password.trim();
 
+    // 1. Check for exact Admin credentials requested:
+    // Email: ADMIN NEMUIN 333
+    // Password: NEMUIN.APP 2
+    if (
+      activeTab === 'login' &&
+      inputEmail === 'ADMIN NEMUIN 333' && 
+      inputPassword === 'NEMUIN.APP 2'
+    ) {
+      setSuccess('Berhasil masuk sebagai Admin!');
+      setTimeout(() => {
+        onLogin('admin', 'ADMIN NEMUIN 333');
+        setLoading(false);
+      }, 1000);
+      return;
+    }
+
+    // 2. Validate input existence for login
+    if (activeTab === 'login') {
+      if (!inputEmail || !inputPassword) {
+        setError('Masuk gagal. Wajib memasukkan alamat email dan kata sandi Anda untuk melanjutkan!');
+        setLoading(false);
+        return;
+      }
+    }
+
     if (activeTab === 'register') {
       // 1. Validate email is @gmail.com
       if (!isGmail) {
@@ -57,20 +83,18 @@ export function LoginScreen({ onLogin, isDarkMode }: LoginScreenProps) {
       }
 
       try {
-        const response = await fetch('/api/auth/register', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: inputEmail, password: inputPassword })
+        const { data, error: signUpError } = await supabase.auth.signUp({
+          email: inputEmail,
+          password: inputPassword,
         });
-        const data = await response.json();
 
-        if (!response.ok) {
-          setError(data.error || 'Gagal mendaftarkan akun.');
+        if (signUpError) {
+          setError(signUpError.message || 'Gagal mendaftarkan akun.');
           setLoading(false);
           return;
         }
 
-        setSuccess('Pendaftaran berhasil! Akun Anda tersimpan di database.');
+        setSuccess('Pendaftaran berhasil! Akun Anda terdaftar di Supabase Auth.');
         
         // Auto-login registered user after a short delay
         setTimeout(() => {
@@ -78,52 +102,37 @@ export function LoginScreen({ onLogin, isDarkMode }: LoginScreenProps) {
           setLoading(false);
         }, 1200);
 
-      } catch (err) {
+      } catch (err: any) {
         console.error(err);
-        setError('Gagal menghubungi database server.');
+        setError(err.message || 'Gagal menghubungi server Supabase Auth.');
         setLoading(false);
       }
     } else {
-      // Login flow
+      // Login flow via Supabase Auth
       try {
-        const response = await fetch('/api/auth/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: inputEmail, password: inputPassword })
+        const { data, error: signInError } = await supabase.auth.signInWithPassword({
+          email: inputEmail,
+          password: inputPassword,
         });
-        const data = await response.json();
 
-        if (!response.ok) {
-          setError(data.error || 'Email atau Kata Sandi salah.');
+        if (signInError) {
+          setError(signInError.message || 'Email atau Kata Sandi salah.');
           setLoading(false);
           return;
         }
 
-        if (data.isGuest) {
-          setSuccess('Masuk sebagai Tamu Tanpa Akun!');
-        } else {
-          setSuccess(`Berhasil masuk! Selamat datang kembali, ${data.email}.`);
-        }
+        const loggedEmail = data.user?.email || inputEmail;
+        setSuccess(`Berhasil masuk! Selamat datang kembali, ${loggedEmail}.`);
 
         setTimeout(() => {
-          onLogin(data.role, data.email);
+          onLogin('user', loggedEmail);
           setLoading(false);
         }, 1000);
 
-      } catch (err) {
+      } catch (err: any) {
         console.error(err);
-        setError('Tidak dapat menghubungi database server. Menggunakan mode lokal cadangan...');
-        
-        setTimeout(() => {
-          if (inputEmail === 'ADMIN NEMUIN 333' && inputPassword === 'NEMUIN.APP 2') {
-            onLogin('admin', 'ADMIN NEMUIN 333');
-          } else if (!inputEmail && !inputPassword) {
-            onLogin('user', 'Pecinta Kuliner (Guest)');
-          } else {
-            setError('Masuk gagal. Database server offline.');
-          }
-          setLoading(false);
-        }, 1000);
+        setError(err.message || 'Gagal menghubungi server Supabase Auth.');
+        setLoading(false);
       }
     }
   };
@@ -198,7 +207,7 @@ export function LoginScreen({ onLogin, isDarkMode }: LoginScreenProps) {
 
           <div className="space-y-1.5">
             <label className={`text-[10px] font-black uppercase tracking-[0.2em] ${isDarkMode ? 'text-[#A8A29E]' : 'text-[#78716C]'}`}>
-              {activeTab === 'register' ? 'Alamat Email (@gmail.com)' : 'Email / Nama Anda'}
+              {activeTab === 'register' ? 'Alamat Email (@gmail.com) Baru' : 'Alamat Email / Nama Admin'}
             </label>
             <div className={`h-14 rounded-2xl border flex items-center px-4 gap-3 transition-all focus-within:ring-2 focus-within:ring-[#FF611D] focus-within:border-transparent ${
               isDarkMode ? 'bg-[#1C1917] border-[#404040]' : 'bg-[#FAF9F6] border-[#E7E5E4]'
@@ -206,7 +215,7 @@ export function LoginScreen({ onLogin, isDarkMode }: LoginScreenProps) {
               <UserIcon className="w-4 h-4 text-[#FF611D] shrink-0" />
               <input 
                 type="text"
-                placeholder={activeTab === 'register' ? "contoh: budi@gmail.com" : "Kosongkan untuk masuk langsung sebagai Guest"}
+                placeholder="Masukkan email anda"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className={`bg-transparent border-none focus:outline-none text-xs md:text-sm font-bold w-full transition-colors ${isDarkMode ? 'text-white placeholder:text-zinc-600' : 'text-[#4B2E2A] placeholder:text-[#A8A29E]'}`}
