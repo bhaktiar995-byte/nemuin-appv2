@@ -33,6 +33,8 @@ import {
   LineChart,
   Line
 } from 'recharts';
+import { AdminApprovalScreen } from './AdminApprovalScreen';
+import { AdminKelolaPenggunaScreen } from './AdminKelolaPenggunaScreen';
 
 interface AdminDashboardScreenProps {
   isDarkMode: boolean;
@@ -135,10 +137,6 @@ export function AdminDashboardScreen({ isDarkMode, onBack, currentUser }: AdminD
     { id: 'Dashboard', icon: Home, label: 'Dashboard' },
     { id: 'Approval', icon: Clock, label: 'Approval Tempat Makan' },
     { id: 'KelolaPengguna', icon: Users, label: 'Kelola Pengguna' },
-    { id: 'KelolaRole', icon: Shield, label: 'Kelola Role' },
-    { id: 'Statistik', icon: BarChart2, label: 'Statistik' },
-    { id: 'Laporan', icon: FileText, label: 'Laporan' },
-    { id: 'Settings', icon: Settings, label: 'Settings' },
   ];
 
   const bgColor = isDarkMode ? 'bg-[#1C1917]' : 'bg-[#FAF9F6]';
@@ -204,8 +202,8 @@ export function AdminDashboardScreen({ isDarkMode, onBack, currentUser }: AdminD
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col h-full overflow-hidden">
-        {/* Scrollable Content */}
-        <div className="flex-1 overflow-y-auto p-8 space-y-6">
+        {activeMenu === 'Dashboard' && (
+          <div className="flex-1 overflow-y-auto p-8 space-y-6">
           
           {/* Summary Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -286,7 +284,10 @@ export function AdminDashboardScreen({ isDarkMode, onBack, currentUser }: AdminD
             <div className={`xl:col-span-2 ${surfaceColor} p-6 rounded-2xl border ${borderColor} shadow-sm`}>
               <div className="flex justify-between items-center mb-6">
                 <h3 className={`text-lg font-bold italic tracking-tight ${textColor}`}>Tempat Makan Menunggu Approval</h3>
-                <button className={`text-xs font-bold px-4 py-1.5 rounded-lg border ${borderColor} text-[#FF611D] hover:bg-orange-50 transition-colors`}>
+                <button 
+                  onClick={() => setActiveMenu('Approval')}
+                  className={`text-xs font-bold px-4 py-1.5 rounded-lg border ${borderColor} text-[#FF611D] hover:bg-orange-50 transition-colors`}
+                >
                   Lihat Semua
                 </button>
               </div>
@@ -321,7 +322,10 @@ export function AdminDashboardScreen({ isDarkMode, onBack, currentUser }: AdminD
             <div className={`${surfaceColor} p-6 rounded-2xl border ${borderColor} shadow-sm`}>
               <div className="flex justify-between items-center mb-6">
                 <h3 className={`text-lg font-bold italic tracking-tight ${textColor}`}>User Terbaru</h3>
-                <button className={`text-xs font-bold px-4 py-1.5 rounded-lg border ${borderColor} text-[#FF611D] hover:bg-orange-50 transition-colors`}>
+                <button 
+                  onClick={() => setActiveMenu('KelolaPengguna')}
+                  className={`text-xs font-bold px-4 py-1.5 rounded-lg border ${borderColor} text-[#FF611D] hover:bg-orange-50 transition-colors`}
+                >
                   Lihat Semua
                 </button>
               </div>
@@ -351,7 +355,10 @@ export function AdminDashboardScreen({ isDarkMode, onBack, currentUser }: AdminD
             <div className={`${surfaceColor} p-6 rounded-2xl border ${borderColor} shadow-sm overflow-hidden`}>
               <div className="flex justify-between items-center mb-6">
                 <h3 className={`text-lg font-bold italic tracking-tight ${textColor}`}>Pengguna Aktif</h3>
-                <button className={`text-xs font-bold px-4 py-1.5 rounded-lg border ${borderColor} text-[#FF611D] hover:bg-orange-50 transition-colors`}>
+                <button 
+                  onClick={() => setActiveMenu('KelolaPengguna')}
+                  className={`text-xs font-bold px-4 py-1.5 rounded-lg border ${borderColor} text-[#FF611D] hover:bg-orange-50 transition-colors`}
+                >
                   Lihat Semua
                 </button>
               </div>
@@ -406,8 +413,11 @@ export function AdminDashboardScreen({ isDarkMode, onBack, currentUser }: AdminD
             <div className={`${surfaceColor} p-6 rounded-2xl border ${borderColor} shadow-sm overflow-hidden`}>
               <div className="flex justify-between items-center mb-6">
                 <h3 className={`text-lg font-bold italic tracking-tight ${textColor}`}>Role Sistem</h3>
-                <button className="bg-[#FF611D] text-white text-xs font-bold px-4 py-2 rounded-lg flex items-center gap-1 shadow-md hover:bg-orange-600 transition-colors">
-                  <Plus className="w-4 h-4" /> Tambah Role
+                <button 
+                  onClick={() => setActiveMenu('KelolaPengguna')}
+                  className={`text-xs font-bold px-4 py-1.5 rounded-lg border ${borderColor} text-[#FF611D] hover:bg-orange-50 transition-colors`}
+                >
+                  Lihat Semua
                 </button>
               </div>
               <div className="overflow-x-auto">
@@ -438,9 +448,23 @@ export function AdminDashboardScreen({ isDarkMode, onBack, currentUser }: AdminD
                 </table>
               </div>
             </div>
+            </div>
           </div>
+        )}
+        {activeMenu === 'Approval' && (
+          <AdminApprovalScreen isDarkMode={isDarkMode} />
+        )}
 
-        </div>
+        {activeMenu === 'KelolaPengguna' && (
+          <AdminKelolaPenggunaScreen isDarkMode={isDarkMode} />
+        )}
+
+        {activeMenu !== 'Dashboard' && activeMenu !== 'Approval' && activeMenu !== 'KelolaPengguna' && (
+          <div className="flex-1 flex flex-col items-center justify-center p-8">
+            <h2 className={`text-2xl font-bold ${textColor}`}>Segera Hadir</h2>
+            <p className={`${mutedColor} mt-2`}>Fitur ini sedang dalam tahap pengembangan.</p>
+          </div>
+        )}
       </main>
     </div>
   );
