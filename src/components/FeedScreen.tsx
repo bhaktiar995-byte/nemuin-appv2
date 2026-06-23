@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Heart, MessageCircle, MapPin, Share2, UtensilsCrossed, X, Send, RefreshCw } from 'lucide-react';
 import { FoodPost } from '../data/mock';
 
@@ -7,11 +7,16 @@ interface FeedScreenProps {
   isDarkMode?: boolean;
   onSeed?: () => Promise<void>;
   isSeeding?: boolean;
+  onCommentStateChange?: (isOpen: boolean) => void;
 }
 
-export function FeedScreen({ posts, isDarkMode, onSeed, isSeeding }: FeedScreenProps) {
+export function FeedScreen({ posts, isDarkMode, onSeed, isSeeding, onCommentStateChange }: FeedScreenProps) {
   const [showComments, setShowComments] = useState<string | null>(null);
   const [commentText, setCommentText] = useState('');
+
+  useEffect(() => {
+    onCommentStateChange?.(showComments !== null);
+  }, [showComments, onCommentStateChange]);
 
   const selectedPost = posts.find(p => p.id === showComments);
 

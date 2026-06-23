@@ -199,13 +199,6 @@ export function DetailScreen({ restaurant, onBack, onChat, onUpdateRestaurant, o
           <div className="flex items-center">
             <Phone className="w-5 h-5 mr-3 shrink-0 text-[#A8A29E]" />
             <p className={`text-sm font-bold flex-1 transition-colors ${isDarkMode ? 'text-white' : 'text-[#4B2E2A]'}`}>{restaurant.phone}</p>
-            <button 
-              onClick={onChat}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-sm hover:opacity-80 transition-all ${isDarkMode ? 'bg-[#FF611D] text-white' : 'bg-[#4B2E2A] text-white'}`}
-            >
-              <MessageCircle className="w-4 h-4" />
-              Chat
-            </button>
           </div>
         </div>
       </div>

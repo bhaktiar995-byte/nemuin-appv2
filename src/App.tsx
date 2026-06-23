@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { Home, List as MenuIcon, MapPin, Compass, PlusCircle, User, UtensilsCrossed, RefreshCw, Search, Settings, Rss, X, SlidersHorizontal, Shield } from 'lucide-react';
+import { Home, List as MenuIcon, MapPin, Compass, PlusCircle, User, UtensilsCrossed, RefreshCw, Search, Settings, Rss, X, SlidersHorizontal, Shield, Store } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { MapScreen } from './components/MapScreen';
 import { ListScreen } from './components/ListScreen';
@@ -19,9 +19,10 @@ import { SpinWheelScreen } from './components/SpinWheelScreen';
 import { SettingsScreen } from './components/SettingsScreen';
 import { LoginScreen } from './components/LoginScreen';
 import { AdminDashboardScreen } from './components/AdminDashboardScreen';
+import { UserManagePlacesScreen } from './components/UserManagePlacesScreen';
 import { Restaurant, FoodPost, calculateDistance } from './data/mock';
 
-type ViewMode = 'map' | 'list' | 'detail' | 'chat' | 'order' | 'feed' | 'create_menu' | 'create_resto' | 'create_post' | 'profile' | 'spin' | 'settings' | 'admin';
+type ViewMode = 'map' | 'list' | 'detail' | 'chat' | 'order' | 'feed' | 'create_menu' | 'create_resto' | 'create_post' | 'profile' | 'spin' | 'settings' | 'admin' | 'manage_places';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<{ email: string; role: 'user' | 'admin' } | null>(null);
@@ -53,6 +54,7 @@ export default function App() {
     priceRange: [] as string[],
     minRating: 0,
   });
+  const [isCommentOpen, setIsCommentOpen] = useState(false);
 
   useEffect(() => {
     if (navigator.geolocation) {
@@ -384,7 +386,7 @@ export default function App() {
                     <Shield className="w-5 h-5" />
                   </button>
                 )}
-                {view !== 'map' && (
+                {view !== 'map' && view !== 'feed' && (
                   <button
                     onClick={() => setView('profile')}
                     className={`h-10 w-10 rounded-2xl flex items-center justify-center border transition-all ${
@@ -449,7 +451,16 @@ export default function App() {
                   <span>{currentUser.role === 'admin' ? 'Curator (Admin)' : 'Pencinta Kuliner (User)'}</span>
                 </div>
               )}
-              {currentUser?.role === 'admin' && (
+              {currentUser?.role === 'user' && view !== 'map' && view !== 'feed' && (
+                <button
+                  onClick={() => setView('manage_places')}
+                  className="h-10 px-3.5 bg-[#FF611D] text-white rounded-xl text-[10px] font-black italic tracking-tighter flex items-center gap-1.5 shadow-[0_4px_10px_rgba(255,97,29,0.2)] hover:scale-105 active:scale-95 transition-all cursor-pointer uppercase shrink-0"
+                >
+                  <Store className="w-3.5 h-3.5" />
+                  <span>Kelola Tempat</span>
+                </button>
+              )}
+              {currentUser?.role === 'admin' && view !== 'map' && view !== 'feed' && (
                 <button
                   onClick={() => setView('admin')}
                   className="h-10 px-3.5 bg-rose-500 text-white rounded-xl text-[10px] font-black italic tracking-tighter flex items-center gap-1.5 shadow-[0_4px_10px_rgba(244,63,94,0.2)] hover:scale-105 active:scale-95 transition-all cursor-pointer uppercase shrink-0"
@@ -458,7 +469,7 @@ export default function App() {
                   <span>Dashboard</span>
                 </button>
               )}
-              {view !== 'map' && (
+              {view !== 'map' && view !== 'feed' && (
                 <button
                   onClick={() => setView('profile')}
                   className={`h-12 w-12 rounded-2xl flex items-center justify-center transition-all duration-300 border ${
@@ -480,7 +491,7 @@ export default function App() {
 
       <div className="flex-1 flex flex-row overflow-hidden relative">
         {/* Sidebar Navigation - Full Height (Desktop) */}
-        {!['spin', 'create_resto', 'create_post', 'create_menu', 'profile', 'settings', 'detail', 'chat', 'order', 'admin'].includes(view) && (
+        {!['spin', 'create_resto', 'create_post', 'create_menu', 'profile', 'settings', 'detail', 'chat', 'order', 'admin', 'manage_places'].includes(view) && (
           <div 
             className={`hidden md:flex flex-col h-full transition-all duration-500 z-[115] border-r w-20 hover:w-64 group/sidebar ${
               isDarkMode ? 'bg-[#262626] border-[#404040]' : 'bg-[#F6F1EA] border-[#E7E5E4]'
@@ -595,6 +606,7 @@ export default function App() {
                 isDarkMode={isDarkMode} 
                 onSeed={handleSeedFeed}
                 isSeeding={isSeeding}
+                onCommentStateChange={setIsCommentOpen}
               />
             )}
             {view === 'create_menu' && (
@@ -654,12 +666,18 @@ export default function App() {
                 currentUser={currentUser}
               />
             )}
+            {view === 'manage_places' && (
+              <UserManagePlacesScreen 
+                isDarkMode={isDarkMode}
+                onBack={() => setView('list')}
+              />
+            )}
           </div>
         </div>
       </div>
 
           {/* Floating Action Button (FAB) for Creating Content */}
-          {(view === 'list' || view === 'feed') && (
+          {(view === 'list' || (view === 'feed' && !isCommentOpen)) && (
             <div className="fixed bottom-24 lg:bottom-12 right-6 lg:right-12 z-[105] hidden md:flex flex-col gap-4 items-end animate-in slide-in-from-right duration-500">
                {/* Quick Add Label */}
                <div className={`px-4 py-2 rounded-2xl border text-sm font-black italic tracking-tighter shadow-lg transform transition-all hover:scale-110 cursor-pointer hidden md:block ${

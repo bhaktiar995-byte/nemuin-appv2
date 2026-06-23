@@ -222,7 +222,7 @@ export function LoginScreen({ onLogin, isDarkMode }: LoginScreenProps) {
 
           <div className="space-y-1.5">
             <label className={`text-[10px] font-black uppercase tracking-[0.2em] ${isDarkMode ? 'text-[#A8A29E]' : 'text-[#78716C]'}`}>
-              {activeTab === 'register' ? 'Alamat Email (@gmail.com) Baru' : 'Alamat Email / Nama Admin'}
+              {activeTab === 'register' ? 'Alamat Email Baru' : 'Alamat Email'}
             </label>
             <div className={`h-14 rounded-2xl border flex items-center px-4 gap-3 transition-all focus-within:ring-2 focus-within:ring-[#FF611D] focus-within:border-transparent ${
               isDarkMode ? 'bg-[#1C1917] border-[#404040]' : 'bg-[#FAF9F6] border-[#E7E5E4]'
