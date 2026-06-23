@@ -122,10 +122,25 @@ export function LoginScreen({ onLogin, isDarkMode }: LoginScreenProps) {
         }
 
         const loggedEmail = data.user?.email || inputEmail;
+        const userId = data.user?.id;
+        let userRole: 'user' | 'admin' = 'user';
+
+        if (userId) {
+          const { data: profileData, error: profileError } = await supabase
+            .from('users_auth')
+            .select('role')
+            .eq('id', userId)
+            .single();
+
+          if (!profileError && profileData && (profileData.role === 'admin' || profileData.role === 'user')) {
+            userRole = profileData.role as 'user' | 'admin';
+          }
+        }
+
         setSuccess(`Berhasil masuk! Selamat datang kembali, ${loggedEmail}.`);
 
         setTimeout(() => {
-          onLogin('user', loggedEmail);
+          onLogin(userRole, loggedEmail);
           setLoading(false);
         }, 1000);
 

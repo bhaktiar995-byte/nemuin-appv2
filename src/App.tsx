@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { Home, List as MenuIcon, MapPin, Compass, PlusCircle, User, UtensilsCrossed, RefreshCw, Search, Settings, Rss, X, SlidersHorizontal } from 'lucide-react';
+import { Home, List as MenuIcon, MapPin, Compass, PlusCircle, User, UtensilsCrossed, RefreshCw, Search, Settings, Rss, X, SlidersHorizontal, Shield } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { MapScreen } from './components/MapScreen';
 import { ListScreen } from './components/ListScreen';
@@ -18,9 +18,10 @@ import { ProfileScreen } from './components/ProfileScreen';
 import { SpinWheelScreen } from './components/SpinWheelScreen';
 import { SettingsScreen } from './components/SettingsScreen';
 import { LoginScreen } from './components/LoginScreen';
+import { AdminDashboardScreen } from './components/AdminDashboardScreen';
 import { Restaurant, FoodPost, calculateDistance } from './data/mock';
 
-type ViewMode = 'map' | 'list' | 'detail' | 'chat' | 'order' | 'feed' | 'create_menu' | 'create_resto' | 'create_post' | 'profile' | 'spin' | 'settings';
+type ViewMode = 'map' | 'list' | 'detail' | 'chat' | 'order' | 'feed' | 'create_menu' | 'create_resto' | 'create_post' | 'profile' | 'spin' | 'settings' | 'admin';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<{ email: string; role: 'user' | 'admin' } | null>(null);
@@ -350,7 +351,7 @@ export default function App() {
       ) : (
         <>
           {/* Top Global Header (Dynamic based on View) */}
-      {(view === 'list' || view === 'feed' || view === 'map') && !['settings', 'profile', 'spin'].includes(view) && (
+      {(view === 'list' || view === 'feed' || view === 'map') && !['settings', 'profile', 'spin', 'admin'].includes(view) && (
         <header className={`shrink-0 z-[120] sticky top-0 transition-colors duration-300 border-b shadow-sm ${isDarkMode ? 'bg-[#1D1B19] border-[#404040]' : 'bg-[#FAF9F6] border-[#E7E5E4]'} backdrop-blur-xl`}>
           <div className="p-4 md:p-6 lg:px-8 flex flex-col md:flex-row md:items-center justify-between gap-3 md:gap-8 w-full">
             {/* Row 1: Branding and Mobile Actions */}
@@ -372,6 +373,15 @@ export default function App() {
                     className="h-10 w-10 bg-[#FF611D] text-white rounded-2xl flex items-center justify-center shadow-lg active:scale-95 transition-all"
                   >
                     <RefreshCw className="w-5 h-5 animate-spin-slow" />
+                  </button>
+                )}
+                {view === 'list' && currentUser?.role === 'admin' && (
+                  <button 
+                    onClick={() => setView('admin')}
+                    className="h-10 w-10 bg-rose-500 text-white rounded-2xl flex items-center justify-center shadow-lg active:scale-95 transition-all"
+                    title="Admin Dashboard"
+                  >
+                    <Shield className="w-5 h-5" />
                   </button>
                 )}
                 {view !== 'map' && (
@@ -439,6 +449,15 @@ export default function App() {
                   <span>{currentUser.role === 'admin' ? 'Curator (Admin)' : 'Pencinta Kuliner (User)'}</span>
                 </div>
               )}
+              {currentUser?.role === 'admin' && (
+                <button
+                  onClick={() => setView('admin')}
+                  className="h-10 px-3.5 bg-rose-500 text-white rounded-xl text-[10px] font-black italic tracking-tighter flex items-center gap-1.5 shadow-[0_4px_10px_rgba(244,63,94,0.2)] hover:scale-105 active:scale-95 transition-all cursor-pointer uppercase shrink-0"
+                >
+                  <Shield className="w-3.5 h-3.5" />
+                  <span>Dashboard</span>
+                </button>
+              )}
               {view !== 'map' && (
                 <button
                   onClick={() => setView('profile')}
@@ -461,7 +480,7 @@ export default function App() {
 
       <div className="flex-1 flex flex-row overflow-hidden relative">
         {/* Sidebar Navigation - Full Height (Desktop) */}
-        {!['spin', 'create_resto', 'create_post', 'create_menu', 'profile', 'settings', 'detail', 'chat', 'order'].includes(view) && (
+        {!['spin', 'create_resto', 'create_post', 'create_menu', 'profile', 'settings', 'detail', 'chat', 'order', 'admin'].includes(view) && (
           <div 
             className={`hidden md:flex flex-col h-full transition-all duration-500 z-[115] border-r w-20 hover:w-64 group/sidebar ${
               isDarkMode ? 'bg-[#262626] border-[#404040]' : 'bg-[#F6F1EA] border-[#E7E5E4]'
@@ -628,6 +647,13 @@ export default function App() {
                 onNavigateProfile={() => setView('profile')}
               />
             )}
+            {view === 'admin' && currentUser?.role === 'admin' && (
+              <AdminDashboardScreen 
+                isDarkMode={isDarkMode} 
+                onBack={() => setView(prevView)}
+                currentUser={currentUser}
+              />
+            )}
           </div>
         </div>
       </div>
@@ -768,7 +794,7 @@ export default function App() {
           )}
 
           {/* Mobile Bottom Navigation (Fixed) */}
-          {view !== 'detail' && view !== 'chat' && view !== 'order' && view !== 'create_resto' && view !== 'create_post' && view !== 'create_menu' && view !== 'spin' && (
+          {view !== 'detail' && view !== 'chat' && view !== 'order' && view !== 'create_resto' && view !== 'create_post' && view !== 'create_menu' && view !== 'spin' && view !== 'admin' && (
             <div className={`md:hidden fixed bottom-0 left-0 right-0 z-[9999] flex justify-around items-center h-20 px-2 pb-safe shadow-[0_-8px_30px_rgba(0,0,0,0.1)] border-t backdrop-blur-xl transition-all duration-300 ${
               isDarkMode ? 'bg-[#262626]/90 border-[#404040]' : 'bg-white/90 border-[#E7E5E4]'
             }`}>
