@@ -148,9 +148,7 @@ export function UserManagePlacesScreen({ onBack, isDarkMode }: ManagePlacesProps
               Kelola semua tempat makan yang telah Anda tambahkan.
             </p>
           </div>
-          <button className="h-10 px-4 bg-[#FF611D] text-white rounded-xl text-sm font-black italic tracking-tighter flex items-center gap-2 shadow-lg hover:scale-105 active:scale-95 transition-all">
-            <Plus className="w-4 h-4" /> Tambah Tempat Baru
-          </button>
+          <div className="w-10 h-10 invisible" />
         </div>
       </div>
 

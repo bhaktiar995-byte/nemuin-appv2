@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { Home, List as MenuIcon, MapPin, Compass, PlusCircle, User, UtensilsCrossed, RefreshCw, Search, Settings, Rss, X, SlidersHorizontal, Shield, Store } from 'lucide-react';
+import { Home, List as MenuIcon, MapPin, Compass, PlusCircle, User, UtensilsCrossed, RefreshCw, Search, Settings, Rss, X, SlidersHorizontal, Shield, Store, LogOut } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { MapScreen } from './components/MapScreen';
 import { ListScreen } from './components/ListScreen';
@@ -529,7 +529,21 @@ export default function App() {
                 ))}
               </nav>
 
-               {/* Mobile/Floating Spin shortcut removed if redundant, but user asked it specifically next to search */}
+                {/* Logout Button at Bottom */}
+                <div className="mt-auto">
+                  <button
+                    onClick={() => { setCurrentUser(null); setView('list'); }}
+                    className={`flex items-center rounded-2xl transition-all duration-300 font-bold h-12 w-full overflow-hidden ${isDarkMode ? 'text-[#A8A29E] hover:text-[#FF611D] hover:bg-[#404040]' : 'text-[#78716C] hover:text-[#FF611D] hover:bg-white border border-transparent hover:border-[#E7E5E4]'}`}
+                  >
+                    <div className="w-12 h-12 flex items-center justify-center shrink-0">
+                      <LogOut className="w-5 h-5" />
+                    </div>
+                    <span className="truncate whitespace-nowrap opacity-0 -translate-x-4 invisible group-hover/sidebar:opacity-100 group-hover/sidebar:translate-x-0 group-hover/sidebar:visible group-hover/sidebar:w-32 ml-2 transition-all duration-300">
+                      Logout
+                    </span>
+                  </button>
+                </div>
+                {/* Mobile/Floating Spin shortcut removed if redundant, but user asked it specifically next to search */}
             </div>
           </div>
         )}
@@ -607,6 +621,7 @@ export default function App() {
                 onSeed={handleSeedFeed}
                 isSeeding={isSeeding}
                 onCommentStateChange={setIsCommentOpen}
+                currentUser={currentUser}
               />
             )}
             {view === 'create_menu' && (
@@ -626,6 +641,7 @@ export default function App() {
                   fetchRestaurants();
                 }} 
                 isDarkMode={isDarkMode} 
+                currentUser={currentUser}
               />
             )}
             {view === 'create_post' && (
@@ -637,6 +653,7 @@ export default function App() {
                   fetchRestaurants();
                 }} 
                 isDarkMode={isDarkMode} 
+                currentUser={currentUser}
               />
             )}
             {view === 'profile' && (

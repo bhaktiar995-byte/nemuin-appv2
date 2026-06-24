@@ -85,7 +85,7 @@ export function ListScreen({
                 />
                 <div className="absolute top-4 right-4 flex items-center bg-[#FF611D] text-white px-3 py-1.5 rounded-xl text-xs font-black italic shadow-lg">
                   <Star className="w-3.5 h-3.5 fill-current mr-1" />
-                  {r.rating}
+                  {r.rating} ({r.reviewCount})
                 </div>
               </div>
               

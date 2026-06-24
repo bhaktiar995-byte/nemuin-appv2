@@ -4,6 +4,7 @@ import { Restaurant, MenuItem, calculateDistance } from '../data/mock';
 import { MapContainer, TileLayer, Marker, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { supabase } from '../lib/supabase';
 
 // Fix generic icon issue with react-leaflet
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -57,13 +58,16 @@ export function DetailScreen({ restaurant, onBack, onChat, onUpdateRestaurant, o
     ? ((restaurant.rating + parseFloat(avgMenuRating)) / 2).toFixed(1)
     : restaurant.rating.toFixed(1);
 
-  const handleRateItem = (itemId: string, newRating: number) => {
+  const handleRateItem = async (itemId: string, newRating: number) => {
+    let updatedItemData: any = null;
     const updatedMenu = localMenu.map(item => {
       if (item.id === itemId) {
         const currentRating = item.rating || 0;
         const currentCount = item.reviewCount || 0;
         const updatedRating = parseFloat(((currentRating * currentCount + newRating) / (currentCount + 1)).toFixed(1));
-        return { ...item, rating: updatedRating, reviewCount: currentCount + 1 };
+        const newItem = { ...item, rating: updatedRating, reviewCount: currentCount + 1 };
+        updatedItemData = newItem;
+        return newItem;
       }
       return item;
     });
@@ -76,14 +80,35 @@ export function DetailScreen({ restaurant, onBack, onChat, onUpdateRestaurant, o
       ? parseFloat((validRatings.reduce((a, b) => a + b, 0) / validRatings.length).toFixed(1))
       : null;
 
+    const newRestoRating = newMenuAvg ? parseFloat(((restaurant.rating + newMenuAvg) / 2).toFixed(1)) : restaurant.rating;
+    const newRestoReviewCount = restaurant.reviewCount + 1;
+
     if (onUpdateRestaurant) {
       const updatedResto = {
         ...restaurant,
         menu: updatedMenu,
         // Update restaurant rating based on menu ratings
-        rating: newMenuAvg ? parseFloat(((restaurant.rating + newMenuAvg) / 2).toFixed(1)) : restaurant.rating
+        rating: newRestoRating,
+        reviewCount: newRestoReviewCount
       };
       onUpdateRestaurant(updatedResto);
+    }
+
+    // Save to database
+    if (updatedItemData) {
+      try {
+        await supabase
+          .from('menu_items')
+          .update({ rating: updatedItemData.rating, review_count: updatedItemData.reviewCount })
+          .eq('id', updatedItemData.id);
+
+        await supabase
+          .from('restaurants')
+          .update({ rating: newRestoRating, review_count: newRestoReviewCount })
+          .eq('id', restaurant.id);
+      } catch (err) {
+        console.error('Failed to update rating in database', err);
+      }
     }
   };
 
@@ -149,7 +174,7 @@ export function DetailScreen({ restaurant, onBack, onChat, onUpdateRestaurant, o
             </span>
             <div className="flex items-center text-sm font-black italic tracking-tighter bg-white/10 backdrop-blur px-2 py-1 rounded-lg border border-white/10">
               <Star className="w-4 h-4 fill-current text-yellow-400 mr-1" />
-              {compositeRating} <span className="mx-1 opacity-50">/</span> {restaurant.reviewCount + (avgMenuRating ? localMenu.length : 0)} REVIEWS
+              {compositeRating} <span className="mx-1 opacity-50">/</span> {restaurant.reviewCount} REVIEWS
             </div>
           </div>
           <h1 className="text-3xl font-bold leading-tight">{restaurant.name}</h1>

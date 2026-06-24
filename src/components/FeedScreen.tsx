@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Heart, MessageCircle, MapPin, Share2, UtensilsCrossed, X, Send, RefreshCw } from 'lucide-react';
 import { FoodPost } from '../data/mock';
+import { supabase } from '../lib/supabase';
 
 interface FeedScreenProps {
   posts: FoodPost[];
@@ -8,17 +9,137 @@ interface FeedScreenProps {
   onSeed?: () => Promise<void>;
   isSeeding?: boolean;
   onCommentStateChange?: (isOpen: boolean) => void;
+  currentUser?: { email: string; role: 'user' | 'admin' } | null;
 }
 
-export function FeedScreen({ posts, isDarkMode, onSeed, isSeeding, onCommentStateChange }: FeedScreenProps) {
+export function FeedScreen({ posts, isDarkMode, onSeed, isSeeding, onCommentStateChange, currentUser }: FeedScreenProps) {
   const [showComments, setShowComments] = useState<string | null>(null);
   const [commentText, setCommentText] = useState('');
+  const [localPosts, setLocalPosts] = useState<FoodPost[]>(posts);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Track likes and comments locally to prevent double actions and show immediate feedback
+  const [likedPostIds, setLikedPostIds] = useState<Set<string>>(new Set());
+  const [localComments, setLocalComments] = useState<Record<string, Array<{id: string, user: string, text: string, time: string, isUser: boolean}>>>({});
+  
+  // Persisted comments from database
+  const [dbComments, setDbComments] = useState<any[]>([]);
+  const [loadingComments, setLoadingComments] = useState(false);
+
+  useEffect(() => {
+    setLocalPosts(posts);
+  }, [posts]);
+
+  // Fetch comments when comments view is opened
+  // Fetch comments when comments view is opened
+  useEffect(() => {
+    const fetchComments = async () => {
+      if (!showComments) {
+        setDbComments([]);
+        return;
+      }
+      setLoadingComments(true);
+      try {
+        const { data, error } = await supabase
+          .from('post_comments')
+          .select('id,author,content,created_at')
+          .eq('post_id', showComments)
+          .order('created_at', { ascending: true });        
+        if (!error && data) {
+          setDbComments(data);
+        } else {
+          console.error('Error fetching comments:', error);
+        }
+      } catch (err) {
+        console.error('Failed to fetch comments from database:', err);
+      } finally {
+        setLoadingComments(false);
+      }
+    };
+
+    fetchComments();
+  }, [showComments]);
 
   useEffect(() => {
     onCommentStateChange?.(showComments !== null);
   }, [showComments, onCommentStateChange]);
 
-  const selectedPost = posts.find(p => p.id === showComments);
+  const selectedPost = localPosts.find(p => p.id === showComments);
+
+  const handleLike = async (postId: string) => {
+    if (likedPostIds.has(postId)) return; // Prevent multiple likes from same user session
+
+    const postToLike = localPosts.find(p => p.id === postId);
+    if (!postToLike) return;
+
+    const newLikes = postToLike.likes + 1;
+    
+    // Update local state
+    setLikedPostIds(prev => new Set(prev).add(postId));
+    setLocalPosts(prev => prev.map(p => p.id === postId ? { ...p, likes: newLikes } : p));
+
+    // Update database
+    try {
+      await supabase
+        .from('posts')
+        .update({ likes: newLikes })
+        .eq('id', postId);
+    } catch (err) {
+      console.error('Failed to like post', err);
+    }
+  };
+
+  const handleComment = async () => {
+    if (!selectedPost || !commentText.trim() || isSubmitting) return;
+
+    setIsSubmitting(true);
+    const newCommentsCount = selectedPost.comments + 1;
+    const authorName = currentUser?.email?.split('@')[0] || 'Anda';
+    
+    const newCommentObj = {
+      id: crypto.randomUUID(),
+      user: authorName,
+      text: commentText,
+      time: 'Baru saja',
+      isUser: true
+    };
+
+    // Optimistically update local state
+    setLocalPosts(prev => prev.map(p => p.id === selectedPost.id ? { ...p, comments: newCommentsCount } : p));
+    setLocalComments(prev => ({
+      ...prev,
+      [selectedPost.id]: [...(prev[selectedPost.id] || []), newCommentObj]
+    }));
+    setCommentText('');
+
+    // Update database (post_comments table and posts count)
+    try {
+      // 1. Insert into post_comments (store author name separately)
+      const { data: commentData, error: commentError } = await supabase
+        .from('post_comments')
+        .insert({
+          post_id: selectedPost.id,
+          author: authorName, // store author name as text
+          content: commentText
+        })
+        .select()
+        .single();
+
+      if (!commentError && commentData) {
+        setDbComments(prev => [...prev, commentData]);
+      }
+
+      // 2. Update comments count in posts table
+      await supabase
+        .from('posts')
+        .update({ comments: newCommentsCount })
+        .eq('id', selectedPost.id);
+    } catch (err) {
+      console.error('Failed to add comment to database', err);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <div className={`flex-1 w-full flex flex-col h-full relative overflow-hidden transition-colors duration-300 ${isDarkMode ? 'bg-[#1C1917]' : 'bg-white'}`}>
@@ -39,7 +160,7 @@ export function FeedScreen({ posts, isDarkMode, onSeed, isSeeding, onCommentStat
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8 max-w-7xl mx-auto">
-            {posts.map(post => (
+            {localPosts.map(post => (
               <div key={post.id} className={`rounded-[2.5rem] overflow-hidden border transition-all duration-500 flex flex-col h-full group ${
                 isDarkMode 
                   ? 'bg-[#262626] border-[#404040] shadow-[0_0_30px_rgba(255,97,29,0.25)] hover:shadow-[0_0_60px_rgba(255,97,29,0.5)] hover:border-[#FF611D]/50' 
@@ -89,8 +210,11 @@ export function FeedScreen({ posts, isDarkMode, onSeed, isSeeding, onCommentStat
                   {/* Actions */}
                   <div className={`mt-auto flex items-center justify-between border-t pt-5 ${isDarkMode ? 'border-[#333333]' : 'border-[#F6F1EA]'}`}>
                     <div className="flex gap-4">
-                      <button className="flex items-center gap-2 text-[#78716C] hover:text-[#FF611D] transition-colors group">
-                        <Heart className="w-5 h-5 group-hover:fill-current" />
+                      <button 
+                        onClick={() => handleLike(post.id)}
+                        className={`flex items-center gap-2 transition-colors group ${likedPostIds.has(post.id) ? 'text-[#FF611D]' : 'text-[#78716C] hover:text-[#FF611D]'}`}
+                      >
+                        <Heart className={`w-5 h-5 ${likedPostIds.has(post.id) ? 'fill-current' : 'group-hover:fill-current'}`} />
                         <span className="text-xs font-bold">{post.likes}</span>
                       </button>
                       <button 
@@ -130,33 +254,59 @@ export function FeedScreen({ posts, isDarkMode, onSeed, isSeeding, onCommentStat
               </button>
             </div>
 
-            {/* Comments List (Prototype) */}
+            {/* Comments List */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              <div className="flex gap-3">
-                <div className="w-8 h-8 rounded-full bg-[#FF611D]/10 flex items-center justify-center shrink-0">
-                  <span className="text-xs font-bold text-[#FF611D]">AF</span>
+              {loadingComments ? (
+                <div className="flex justify-center items-center py-10">
+                  <RefreshCw className="w-6 h-6 text-[#FF611D] animate-spin" />
                 </div>
-                <div className={`flex-1 p-3 rounded-2xl rounded-tl-none transition-colors ${isDarkMode ? 'bg-[#333333]' : 'bg-[#F6F1EA]'}`}>
-                  <div className="flex justify-between mb-1">
-                    <span className={`text-xs font-bold ${isDarkMode ? 'text-white' : 'text-[#4B2E2A]'}`}>Afandika_11</span>
-                    <span className="text-[10px] text-[#A8A29E]">5 menit yang lalu</span>
-                  </div>
-                  <p className={`text-sm ${isDarkMode ? 'text-[#FAF9F6]' : 'text-[#4B2E2A]'}`}>Wah beneran merjosari sebelah mana nih bang? Jadi pengen nyoba tar malem!</p>
-                </div>
-              </div>
+              ) : (
+                <>
+                  {/* Render database comments or fallback local comments */}
+                  {dbComments.length > 0 ? (
+                    dbComments.map((comment: any) => (
+                      <div key={comment.id} className="flex gap-3 animate-in slide-in-from-right-4 duration-300">
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${comment.author === (currentUser?.email?.split('@')[0] || 'Anda') ? 'bg-[#FF611D]/10 text-[#FF611D]' : 'bg-blue-100 text-blue-600'}`}>
+                          <span className="text-xs font-bold">{(comment.author_name || comment.author || 'An').substring(0, 2).toUpperCase()}</span>
+                        </div>
+                        <div className={`flex-1 p-3 rounded-2xl rounded-tl-none transition-colors ${isDarkMode ? 'bg-[#333333]' : 'bg-[#F6F1EA]'}`}>
+                          <div className="flex justify-between mb-1">
+                            <span className={`text-xs font-bold ${isDarkMode ? 'text-white' : 'text-[#4B2E2A]'}`}>{comment.author_name ?? comment.author}</span>
+                            <span className="text-[10px] text-[#A8A29E]">
+                              {comment.created_at ? new Date(comment.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : 'Baru saja'}
+                            </span>
+                          </div>
+                          <p className={`text-sm ${isDarkMode ? 'text-[#FAF9F6]' : 'text-[#4B2E2A]'}`}>{comment.content}</p>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    (localComments[selectedPost.id] || []).map(comment => (
+                      <div key={comment.id} className="flex gap-3 animate-in slide-in-from-right-4 duration-300">
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${comment.isUser ? 'bg-[#FF611D]/10 text-[#FF611D]' : 'bg-blue-100 text-blue-600'}`}>
+                          <span className="text-xs font-bold">{comment.user.substring(0, 2).toUpperCase()}</span>
+                        </div>
+                        <div className={`flex-1 p-3 rounded-2xl rounded-tl-none transition-colors ${isDarkMode ? 'bg-[#333333]' : 'bg-[#F6F1EA]'}`}>
+                          <div className="flex justify-between mb-1">
+                            <span className={`text-xs font-bold ${isDarkMode ? 'text-white' : 'text-[#4B2E2A]'}`}>{comment.user}</span>
+                            <span className="text-[10px] text-[#A8A29E]">{comment.time}</span>
+                          </div>
+                          <p className={`text-sm ${isDarkMode ? 'text-[#FAF9F6]' : 'text-[#4B2E2A]'}`}>{comment.text}</p>
+                        </div>
+                      </div>
+                    ))
+                  )}
 
-              <div className="flex gap-3">
-                <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
-                  <span className="text-xs font-bold text-blue-600">KK</span>
-                </div>
-                <div className={`flex-1 p-3 rounded-2xl rounded-tl-none transition-colors ${isDarkMode ? 'bg-[#333333]' : 'bg-[#F6F1EA]'}`}>
-                  <div className="flex justify-between mb-1">
-                    <span className={`text-xs font-bold ${isDarkMode ? 'text-white' : 'text-[#4B2E2A]'}`}>Kak_Kulang</span>
-                    <span className="text-[10px] text-[#A8A29E]">12 menit yang lalu</span>
-                  </div>
-                  <p className={`text-sm ${isDarkMode ? 'text-[#FAF9F6]' : 'text-[#4B2E2A]'}`}>Sumpah emang enak bgt, sambelnya juara sih disitu.</p>
-                </div>
-              </div>
+                  {/* No Comments placeholder if empty both in DB and locally */}
+                  {selectedPost.comments === 0 && dbComments.length === 0 && !(localComments[selectedPost.id]?.length > 0) && (
+                    <div className="flex-1 flex items-center justify-center pt-10">
+                      <p className={`text-sm font-medium ${isDarkMode ? 'text-[#A8A29E]' : 'text-[#78716C]'}`}>
+                        Belum ada komentar. Jadilah yang pertama!
+                      </p>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
 
             {/* Input Fixed at Bottom */}
@@ -171,8 +321,16 @@ export function FeedScreen({ posts, isDarkMode, onSeed, isSeeding, onCommentStat
                   className={`flex-1 bg-transparent border-none focus:outline-none text-sm ${isDarkMode ? 'text-white placeholder:text-[#78716C]' : 'text-[#4B2E2A] placeholder:text-[#A8A29E]'}`}
                   value={commentText}
                   onChange={(e) => setCommentText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleComment();
+                  }}
+                  disabled={isSubmitting}
                 />
-                <button className={`ml-2 p-1.5 rounded-full transition-colors ${commentText.trim() ? 'bg-[#FF611D] text-white' : 'text-[#A8A29E]'}`}>
+                <button 
+                  onClick={handleComment}
+                  disabled={isSubmitting || !commentText.trim()}
+                  className={`ml-2 p-1.5 rounded-full transition-colors ${commentText.trim() && !isSubmitting ? 'bg-[#FF611D] text-white' : 'text-[#A8A29E]'}`}
+                >
                   <Send className="w-4 h-4" />
                 </button>
               </div>

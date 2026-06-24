@@ -17,6 +17,7 @@ interface MockFormProps {
   onBack: () => void;
   onSuccess: () => void;
   isDarkMode?: boolean;
+  currentUser?: { email: string; role: 'user' | 'admin' } | null;
 }
 
 const pickerIcon = L.divIcon({
@@ -81,7 +82,7 @@ function LocateControl({ onLocationFound, isDarkMode }: { onLocationFound: (latl
   );
 }
 
-export function AddFormsScreen({ type, onBack, onSuccess, isDarkMode }: MockFormProps) {
+export function AddFormsScreen({ type, onBack, onSuccess, isDarkMode, currentUser }: MockFormProps) {
   const [loading, setLoading] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('Lalapan');
   const [customCategory, setCustomCategory] = useState('');
@@ -205,12 +206,15 @@ export function AddFormsScreen({ type, onBack, onSuccess, isDarkMode }: MockForm
           if (menuError) throw menuError;
         }
       } else {
+        // Extract display name from email or use default
+        const authorName = currentUser?.email?.split('@')[0] || 'Community User';
+        
         // Insert Post
         const { error: postError } = await supabase.from('posts').insert({
           content: formData.get('content'),
           image: imageUrl,
-          author: 'Community User',
-          user_avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Community',
+          author: authorName,
+          user_avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${authorName}`,
           likes: 0,
           comments: 0,
           date: 'Baru saja',
