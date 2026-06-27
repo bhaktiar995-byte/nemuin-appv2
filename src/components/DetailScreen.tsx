@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ChevronLeft, MapPin, Clock, Phone, Star, Share, Heart, MessageCircle, X, ThumbsUp, Trash2 } from 'lucide-react';
+import { ChevronLeft, MapPin, Clock, Phone, Star, Share, MessageCircle, X, Trash2 } from 'lucide-react';
 import { Restaurant, MenuItem, calculateDistance } from '../data/mock';
 import { MapContainer, TileLayer, Marker, useMap } from 'react-leaflet';
 import L from 'leaflet';
@@ -140,16 +140,14 @@ export function DetailScreen({ restaurant, onBack, onChat, onUpdateRestaurant, o
           >
             <ChevronLeft className="w-8 h-8" />
           </button>
-        </div>
-
-        {/* Improved Actions overlay */}
-        <div className="absolute bottom-10 right-6 z-[30] flex flex-col gap-3">
-          <button className="w-14 h-14 bg-white/20 backdrop-blur-md rounded-[1.25rem] flex items-center justify-center text-white hover:bg-[#FF611D] transition-all hover:scale-110 active:scale-90 shadow-xl border border-white/20 border-white/20" title="Bagikan">
+          <button className="w-12 h-12 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center text-white hover:bg-[#FF611D] transition-all hover:scale-110 active:scale-95 shadow-lg border border-white/20" title="Bagikan">
             <Share className="w-6 h-6" />
           </button>
-          <button className="w-14 h-14 bg-white/20 backdrop-blur-md rounded-[1.25rem] flex items-center justify-center text-white hover:bg-[#FF611D] transition-all hover:scale-110 active:scale-90 shadow-xl border border-white/20 border-white/20" title="Suka">
-            <Heart className="w-6 h-6" />
-          </button>
+        </div>
+
+        {/* Actions overlay */}
+        <div className="absolute bottom-10 right-6 z-[30] flex flex-col gap-3">
+
           {onDeleteRestaurant && (
             <button 
               onClick={() => setShowDeleteConfirm(true)}
@@ -286,9 +284,6 @@ export function DetailScreen({ restaurant, onBack, onChat, onUpdateRestaurant, o
                         <p className={`text-sm font-bold transition-colors ${isDarkMode ? 'text-[#FAF9F6]' : 'text-[#F6F1EA]'}`}>
                           Rp{item.price.toLocaleString('id-ID')}
                         </p>
-                        <button className="text-[10px] font-black italic tracking-tighter text-[#FF611D] flex items-center gap-1 bg-white/5 px-2 py-1 rounded-lg hover:bg-[#FF611D] hover:text-white transition-all">
-                          <ThumbsUp className="w-3 h-3" /> SUKA
-                        </button>
                       </div>
                     </div>
                   </div>

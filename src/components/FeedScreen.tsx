@@ -18,19 +18,70 @@ export function FeedScreen({ posts, isDarkMode, onSeed, isSeeding, onCommentStat
   const [localPosts, setLocalPosts] = useState<FoodPost[]>(posts);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  // Track likes and comments locally to prevent double actions and show immediate feedback
-  const [likedPostIds, setLikedPostIds] = useState<Set<string>>(new Set());
-  const [localComments, setLocalComments] = useState<Record<string, Array<{id: string, user: string, text: string, time: string, isUser: boolean}>>>({});
-  
-  // Persisted comments from database
+  const getLikesKey = () => `nemuin_likes_${currentUser?.email || 'guest'}`;
+
+  // Track likes: session set + DB-backed persistence + localStorage fallback
+  const [likedPostIds, setLikedPostIds] = useState<Set<string>>(() => {
+    // Only initialized initially, effect below syncs with specific user
+    return new Set();
+  });
+  const [likesTableExists, setLikesTableExists] = useState(true);
+
+  // Sync likes from local storage on user change
+  useEffect(() => {
+    const saved = localStorage.getItem(getLikesKey());
+    if (saved) {
+      setLikedPostIds(new Set(JSON.parse(saved)));
+    } else {
+      setLikedPostIds(new Set());
+    }
+  }, [currentUser?.email]);
+
+  // Comments: DB comments + local optimistic comments as fallback
   const [dbComments, setDbComments] = useState<any[]>([]);
+  const [localComments, setLocalComments] = useState<Record<string, Array<{id: string, user: string, text: string, time: string}>>>(() => {
+    const saved = localStorage.getItem('nemuin_comments');
+    return saved ? JSON.parse(saved) : {};
+  });
   const [loadingComments, setLoadingComments] = useState(false);
+  const [commentsTableWorks, setCommentsTableWorks] = useState(true);
 
   useEffect(() => {
     setLocalPosts(posts);
   }, [posts]);
 
-  // Fetch comments when comments view is opened
+  // Try to load user's liked posts from database on mount
+  useEffect(() => {
+    const fetchUserLikes = async () => {
+      if (!currentUser?.email) return;
+      
+      try {
+        const { data, error } = await supabase
+          .from('post_likes')
+          .select('post_id')
+          .eq('user_email', currentUser.email);
+        
+        if (error) {
+          console.warn('post_likes table not available, using session-only likes:', error.message);
+          setLikesTableExists(false);
+        } else if (data && data.length > 0) {
+          // Merge DB likes with local storage likes to prevent data loss if DB insert failed previously
+          setLikedPostIds(prev => {
+            const merged = new Set(prev);
+            data.forEach((like: any) => merged.add(like.post_id));
+            localStorage.setItem(getLikesKey(), JSON.stringify(Array.from(merged)));
+            return merged;
+          });
+        }
+      } catch (err) {
+        console.warn('Failed to fetch user likes, falling back to session-only:', err);
+        setLikesTableExists(false);
+      }
+    };
+
+    fetchUserLikes();
+  }, [currentUser?.email]);
+
   // Fetch comments when comments view is opened
   useEffect(() => {
     const fetchComments = async () => {
@@ -42,16 +93,23 @@ export function FeedScreen({ posts, isDarkMode, onSeed, isSeeding, onCommentStat
       try {
         const { data, error } = await supabase
           .from('post_comments')
-          .select('id,author,content,created_at')
+          .select('*')
           .eq('post_id', showComments)
           .order('created_at', { ascending: true });        
         if (!error && data) {
-          setDbComments(data);
+          const mappedData = data.map(c => ({
+            ...c,
+            author: c.author || c.author_name || 'Anonim'
+          }));
+          setDbComments(mappedData);
+          setCommentsTableWorks(true);
         } else {
-          console.error('Error fetching comments:', error);
+          console.warn('Error fetching comments:', error?.message);
+          setCommentsTableWorks(false);
         }
       } catch (err) {
-        console.error('Failed to fetch comments from database:', err);
+        console.warn('Failed to fetch comments from database:', err);
+        setCommentsTableWorks(false);
       } finally {
         setLoadingComments(false);
       }
@@ -67,25 +125,61 @@ export function FeedScreen({ posts, isDarkMode, onSeed, isSeeding, onCommentStat
   const selectedPost = localPosts.find(p => p.id === showComments);
 
   const handleLike = async (postId: string) => {
-    if (likedPostIds.has(postId)) return; // Prevent multiple likes from same user session
+    const postToUpdate = localPosts.find(p => p.id === postId);
+    if (!postToUpdate) return;
 
-    const postToLike = localPosts.find(p => p.id === postId);
-    if (!postToLike) return;
-
-    const newLikes = postToLike.likes + 1;
+    const isLiking = !likedPostIds.has(postId);
+    const currentLikes = parseInt(postToUpdate.likes as any) || 0;
+    const newLikes = isLiking ? currentLikes + 1 : Math.max(0, currentLikes - 1);
     
-    // Update local state
-    setLikedPostIds(prev => new Set(prev).add(postId));
+    // Update local state immediately
+    setLikedPostIds(prev => {
+      const next = new Set(prev);
+      if (isLiking) {
+        next.add(postId);
+      } else {
+        next.delete(postId);
+      }
+      localStorage.setItem(getLikesKey(), JSON.stringify(Array.from(next)));
+      return next;
+    });
+    
     setLocalPosts(prev => prev.map(p => p.id === postId ? { ...p, likes: newLikes } : p));
 
-    // Update database
+    // Try to persist to database
     try {
+      // Update likes count in posts table
       await supabase
         .from('posts')
         .update({ likes: newLikes })
         .eq('id', postId);
+
+      // Track in post_likes if table exists and user is logged in
+      if (likesTableExists && currentUser?.email) {
+        if (isLiking) {
+          const { error: likeError } = await supabase
+            .from('post_likes')
+            .insert({
+              post_id: postId,
+              user_email: currentUser.email
+            });
+
+          if (likeError) {
+            console.warn('Could not track like in post_likes:', likeError.message);
+            if (likeError.message?.includes('relation') || likeError.code === '42P01') {
+              setLikesTableExists(false);
+            }
+          }
+        } else {
+          // Unlike
+          await supabase
+            .from('post_likes')
+            .delete()
+            .match({ post_id: postId, user_email: currentUser.email });
+        }
+      }
     } catch (err) {
-      console.error('Failed to like post', err);
+      console.warn('Failed to persist like/unlike to database:', err);
     }
   };
 
@@ -95,38 +189,56 @@ export function FeedScreen({ posts, isDarkMode, onSeed, isSeeding, onCommentStat
     setIsSubmitting(true);
     const newCommentsCount = selectedPost.comments + 1;
     const authorName = currentUser?.email?.split('@')[0] || 'Anda';
-    
-    const newCommentObj = {
+    const savedText = commentText.trim();
+
+    // Create local comment object for immediate display
+    const localComment = {
       id: crypto.randomUUID(),
       user: authorName,
-      text: commentText,
-      time: 'Baru saja',
-      isUser: true
+      text: savedText,
+      time: 'Baru saja'
     };
 
-    // Optimistically update local state
+    // Optimistically update UI immediately
     setLocalPosts(prev => prev.map(p => p.id === selectedPost.id ? { ...p, comments: newCommentsCount } : p));
-    setLocalComments(prev => ({
-      ...prev,
-      [selectedPost.id]: [...(prev[selectedPost.id] || []), newCommentObj]
-    }));
+    setLocalComments(prev => {
+      const next = {
+        ...prev,
+        [selectedPost.id]: [...(prev[selectedPost.id] || []), localComment]
+      };
+      localStorage.setItem('nemuin_comments', JSON.stringify(next));
+      return next;
+    });
     setCommentText('');
 
-    // Update database (post_comments table and posts count)
+    // Try to persist to database
     try {
-      // 1. Insert into post_comments (store author name separately)
+      // 1. Insert into post_comments
       const { data: commentData, error: commentError } = await supabase
         .from('post_comments')
         .insert({
           post_id: selectedPost.id,
-          author: authorName, // store author name as text
-          content: commentText
+          author: authorName,
+          content: savedText
         })
         .select()
         .single();
 
       if (!commentError && commentData) {
+        // Successfully saved to DB — add to dbComments and remove from localComments
         setDbComments(prev => [...prev, commentData]);
+        setLocalComments(prev => {
+          const updated = { ...prev };
+          if (updated[selectedPost.id]) {
+            updated[selectedPost.id] = updated[selectedPost.id].filter(c => c.id !== localComment.id);
+            if (updated[selectedPost.id].length === 0) delete updated[selectedPost.id];
+          }
+          localStorage.setItem('nemuin_comments', JSON.stringify(updated));
+          return updated;
+        });
+      } else {
+        console.warn('Error inserting comment to DB:', commentError?.message);
+        // Comment stays in localComments as fallback display
       }
 
       // 2. Update comments count in posts table
@@ -135,11 +247,36 @@ export function FeedScreen({ posts, isDarkMode, onSeed, isSeeding, onCommentStat
         .update({ comments: newCommentsCount })
         .eq('id', selectedPost.id);
     } catch (err) {
-      console.error('Failed to add comment to database', err);
+      console.warn('Failed to add comment to database, showing locally:', err);
+      // Comment remains visible in localComments
     } finally {
       setIsSubmitting(false);
     }
   };
+
+  // Merge DB comments + local fallback comments for display
+  const getCommentsForPost = (postId: string) => {
+    const fromDb = dbComments.map(c => ({
+      id: c.id,
+      user: c.author || 'Anonim',
+      text: c.content,
+      time: c.created_at ? new Date(c.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : 'Baru saja',
+      isFromDb: true
+    }));
+    const fromLocal = (localComments[postId] || []).map(c => ({
+      id: c.id,
+      user: c.user,
+      text: c.text,
+      time: c.time,
+      isFromDb: false
+    }));
+    return [...fromDb, ...fromLocal];
+  };
+
+  // Get current user's initials for the comment input avatar
+  const userInitials = currentUser?.email
+    ? currentUser.email.split('@')[0].substring(0, 2).toUpperCase()
+    : 'AN';
 
   return (
     <div className={`flex-1 w-full flex flex-col h-full relative overflow-hidden transition-colors duration-300 ${isDarkMode ? 'bg-[#1C1917]' : 'bg-white'}`}>
@@ -225,9 +362,7 @@ export function FeedScreen({ posts, isDarkMode, onSeed, isSeeding, onCommentStat
                         <span className="text-xs font-bold">{post.comments}</span>
                       </button>
                     </div>
-                    <button className={`text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-lg transition-colors ${isDarkMode ? 'text-[#FF611D] bg-[#333333]' : 'text-[#FF611D] bg-[#F6F1EA]'}`}>
-                      Read More
-                    </button>
+
                   </div>
                 </div>
               </div>
@@ -262,49 +397,37 @@ export function FeedScreen({ posts, isDarkMode, onSeed, isSeeding, onCommentStat
                 </div>
               ) : (
                 <>
-                  {/* Render database comments or fallback local comments */}
-                  {dbComments.length > 0 ? (
-                    dbComments.map((comment: any) => (
-                      <div key={comment.id} className="flex gap-3 animate-in slide-in-from-right-4 duration-300">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${comment.author === (currentUser?.email?.split('@')[0] || 'Anda') ? 'bg-[#FF611D]/10 text-[#FF611D]' : 'bg-blue-100 text-blue-600'}`}>
-                          <span className="text-xs font-bold">{(comment.author_name || comment.author || 'An').substring(0, 2).toUpperCase()}</span>
-                        </div>
-                        <div className={`flex-1 p-3 rounded-2xl rounded-tl-none transition-colors ${isDarkMode ? 'bg-[#333333]' : 'bg-[#F6F1EA]'}`}>
-                          <div className="flex justify-between mb-1">
-                            <span className={`text-xs font-bold ${isDarkMode ? 'text-white' : 'text-[#4B2E2A]'}`}>{comment.author_name ?? comment.author}</span>
-                            <span className="text-[10px] text-[#A8A29E]">
-                              {comment.created_at ? new Date(comment.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : 'Baru saja'}
-                            </span>
+                  {/* Render merged comments (DB + local fallback) */}
+                  {(() => {
+                    const allComments = getCommentsForPost(selectedPost.id);
+                    if (allComments.length > 0) {
+                      return allComments.map((comment) => (
+                        <div key={comment.id} className="flex gap-3 animate-in slide-in-from-right-4 duration-300">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
+                            comment.user === (currentUser?.email?.split('@')[0] || 'Anda') 
+                              ? 'bg-[#FF611D]/10 text-[#FF611D]' 
+                              : 'bg-blue-100 text-blue-600'
+                          }`}>
+                            <span className="text-xs font-bold">{(comment.user || 'An').substring(0, 2).toUpperCase()}</span>
                           </div>
-                          <p className={`text-sm ${isDarkMode ? 'text-[#FAF9F6]' : 'text-[#4B2E2A]'}`}>{comment.content}</p>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    (localComments[selectedPost.id] || []).map(comment => (
-                      <div key={comment.id} className="flex gap-3 animate-in slide-in-from-right-4 duration-300">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${comment.isUser ? 'bg-[#FF611D]/10 text-[#FF611D]' : 'bg-blue-100 text-blue-600'}`}>
-                          <span className="text-xs font-bold">{comment.user.substring(0, 2).toUpperCase()}</span>
-                        </div>
-                        <div className={`flex-1 p-3 rounded-2xl rounded-tl-none transition-colors ${isDarkMode ? 'bg-[#333333]' : 'bg-[#F6F1EA]'}`}>
-                          <div className="flex justify-between mb-1">
-                            <span className={`text-xs font-bold ${isDarkMode ? 'text-white' : 'text-[#4B2E2A]'}`}>{comment.user}</span>
-                            <span className="text-[10px] text-[#A8A29E]">{comment.time}</span>
+                          <div className={`flex-1 p-3 rounded-2xl rounded-tl-none transition-colors ${isDarkMode ? 'bg-[#333333]' : 'bg-[#F6F1EA]'}`}>
+                            <div className="flex justify-between mb-1">
+                              <span className={`text-xs font-bold ${isDarkMode ? 'text-white' : 'text-[#4B2E2A]'}`}>{comment.user}</span>
+                              <span className="text-[10px] text-[#A8A29E]">{comment.time}</span>
+                            </div>
+                            <p className={`text-sm ${isDarkMode ? 'text-[#FAF9F6]' : 'text-[#4B2E2A]'}`}>{comment.text}</p>
                           </div>
-                          <p className={`text-sm ${isDarkMode ? 'text-[#FAF9F6]' : 'text-[#4B2E2A]'}`}>{comment.text}</p>
                         </div>
+                      ));
+                    }
+                    return (
+                      <div className="flex-1 flex items-center justify-center pt-10">
+                        <p className={`text-sm font-medium ${isDarkMode ? 'text-[#A8A29E]' : 'text-[#78716C]'}`}>
+                          Belum ada komentar. Jadilah yang pertama!
+                        </p>
                       </div>
-                    ))
-                  )}
-
-                  {/* No Comments placeholder if empty both in DB and locally */}
-                  {selectedPost.comments === 0 && dbComments.length === 0 && !(localComments[selectedPost.id]?.length > 0) && (
-                    <div className="flex-1 flex items-center justify-center pt-10">
-                      <p className={`text-sm font-medium ${isDarkMode ? 'text-[#A8A29E]' : 'text-[#78716C]'}`}>
-                        Belum ada komentar. Jadilah yang pertama!
-                      </p>
-                    </div>
-                  )}
+                    );
+                  })()}
                 </>
               )}
             </div>
@@ -312,7 +435,7 @@ export function FeedScreen({ posts, isDarkMode, onSeed, isSeeding, onCommentStat
             {/* Input Fixed at Bottom */}
             <div className={`p-4 border-t pb-safe flex items-center gap-3 transition-colors ${isDarkMode ? 'bg-[#262626] border-[#404040]' : 'bg-white border-[#E7E5E4]'}`}>
               <div className="w-10 h-10 rounded-full bg-[#4B2E2A] flex items-center justify-center shrink-0">
-                <span className="text-xs font-bold text-white">SF</span>
+                <span className="text-xs font-bold text-white">{userInitials}</span>
               </div>
               <div className={`flex-1 rounded-2xl px-4 py-2 flex items-center border border-transparent focus-within:border-[#FF611D] transition-colors ${isDarkMode ? 'bg-[#333333]' : 'bg-[#F6F1EA]'}`}>
                 <input 

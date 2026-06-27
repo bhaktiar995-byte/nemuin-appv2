@@ -33,8 +33,15 @@ export function ListScreen({
                         r.foodCategories.some(c => c.toLowerCase().includes(searchQuery.toLowerCase()));
     const matchCategory = activeCategory ? r.foodCategories.includes(activeCategory) || r.type === activeCategory : true;
     
-    // Additional filters
-    const matchPrice = filters.priceRange.length > 0 ? filters.priceRange.includes(r.priceRange) : true;
+    // Additional filters - parse numeric ranges
+    const matchPrice = filters.priceRange.length > 0 ? filters.priceRange.some(rangeId => {
+      // Extract max price from restaurant's priceRange string (e.g. "Rp 15.000 - Rp 35.000")
+      const priceNumbers = r.priceRange.match(/[\d.]+/g);
+      if (!priceNumbers || priceNumbers.length === 0) return false;
+      const maxPrice = Math.max(...priceNumbers.map(p => parseInt(p.replace(/\./g, ''))));
+      const [rangeMin, rangeMax] = rangeId.split('-').map(Number);
+      return maxPrice >= rangeMin && maxPrice <= rangeMax;
+    }) : true;
     const matchRating = r.rating >= filters.minRating;
 
     return matchSearch && matchCategory && matchPrice && matchRating;

@@ -349,7 +349,13 @@ export default function App() {
           </div>
         </div>
       ) : !currentUser ? (
-        <LoginScreen onLogin={(role, email) => setCurrentUser({ role, email })} isDarkMode={isDarkMode} />
+        <LoginScreen 
+          onLogin={(role, email) => {
+            setCurrentUser({ role, email });
+            fetchRestaurants(); // Refetch data to get latest likes and comments
+          }} 
+          isDarkMode={isDarkMode} 
+        />
       ) : (
         <>
           {/* Top Global Header (Dynamic based on View) */}
@@ -735,11 +741,12 @@ export default function App() {
                   {/* Price Range */}
                   <div className="space-y-4">
                     <h4 className={`text-[10px] font-black uppercase tracking-[0.2em] ${isDarkMode ? 'text-[#A8A29E]' : 'text-[#78716C]'}`}>Range Harga</h4>
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="grid grid-cols-2 gap-2">
                        {[
-                        { id: '$', label: 'Murmer' },
-                        { id: '$$', label: 'Sedang' },
-                        { id: '$$$', label: 'Sultan' }
+                        { id: '0-15000', label: '< Rp 15.000' },
+                        { id: '15000-25000', label: 'Rp 15.000 - 25.000' },
+                        { id: '25000-35000', label: 'Rp 25.000 - 35.000' },
+                        { id: '35000-999999', label: '> Rp 35.000' }
                       ].map((range) => (
                         <button
                           key={range.id}
