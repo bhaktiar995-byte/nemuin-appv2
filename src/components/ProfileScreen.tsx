@@ -1,6 +1,7 @@
-import { User, Settings, LogOut, ChevronRight, Award, Heart, MessageSquare, Moon, Sun, ChevronLeft, CreditCard, Edit, Crown, Check, X, Camera, Trophy, MapPin, Settings2, Plus, Store, Clock } from 'lucide-react';
-import { useState } from 'react';
+import { User, Settings, LogOut, ChevronRight, Award, Heart, MessageSquare, Moon, Sun, ChevronLeft, CreditCard, Edit, Crown, Check, X, Camera, Trophy, MapPin, Settings2, Plus, Store, Clock, Trash2, MessageCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { supabase } from '@/lib/supabase';
 
 interface ProfileScreenProps {
   isDarkMode?: boolean;
@@ -11,20 +12,18 @@ interface ProfileScreenProps {
 }
 
 export function ProfileScreen({ isDarkMode, onBack, userRole = 'user', userEmail = 'user@nemuin.com', onLogout }: ProfileScreenProps) {
-  const [activeSubView, setActiveSubView] = useState<'profile' | 'edit' | 'subscription' | 'account' | 'ad_options' | 'ad_settings'>('profile');
+  const [activeSubView, setActiveSubView] = useState<'profile' | 'edit' | 'subscription' | 'account' | 'ad_options' | 'ad_settings' | 'posts'>('profile');
   const [currentTier, setCurrentTier] = useState<'free' | 'lite' | 'pro' | 'business'>(userRole === 'admin' ? 'pro' : 'free');
   
   // Edit Profile State
   const [profileData, setProfileData] = useState({
-    name: userRole === 'admin' ? 'Surya Firdaus (Admin)' : 'Surya Firdaus',
-    bio: userRole === 'admin' 
-      ? 'Administrator Utama Nemuin. Mengurasi dan mengelola direktori kuliner Malang.' 
-      : 'Pecinta kuliner tersembunyi yang suka berbagi pengalaman rasa.',
-    location: 'Malang',
-    level: userRole === 'admin' ? 'Chief Curator / Admin' : 'Local Guide Level 4',
+    name: '',
+    bio: '',
+    location: '',
     email: userEmail,
-    phone: '+62 812 3456 7890',
-    joinDate: '12 Januari 2024'
+    phone: '',
+    joinDate: '',
+    avatar: ''
   });
 
   const [adSettings, setAdSettings] = useState({
@@ -33,8 +32,271 @@ export function ProfileScreen({ isDarkMode, onBack, userRole = 'user', userEmail
     thirdParty: false
   });
 
-  const handleSaveProfile = () => {
-    setActiveSubView('profile');
+  const [isSaving, setIsSaving] = useState(false);
+  const [userPosts, setUserPosts] = useState<any[]>([]);
+  const [isLoadingPosts, setIsLoadingPosts] = useState(false);
+
+  const [modalConfig, setModalConfig] = useState<{
+    isOpen: boolean;
+    type: 'prompt' | 'confirm' | 'alert';
+    title: string;
+    message?: string;
+    defaultValue?: string;
+    placeholder?: string;
+    isPassword?: boolean;
+    confirmText?: string;
+    cancelText?: string;
+    confirmColor?: string;
+    onConfirm: (val: string) => void;
+    onCancel?: () => void;
+  } | null>(null);
+
+  const showModal = (config: Omit<typeof modalConfig, 'isOpen' | 'onConfirm' | 'onCancel'>) => {
+    return new Promise<string | null>((resolve) => {
+      setModalConfig({
+        ...config,
+        isOpen: true,
+        onConfirm: (val) => {
+          setModalConfig(null);
+          resolve(val);
+        },
+        onCancel: () => {
+          setModalConfig(null);
+          resolve(null);
+        }
+      });
+    });
+  };
+
+  useEffect(() => {
+    if (activeSubView === 'posts') {
+      fetchUserPosts();
+    }
+  }, [activeSubView]);
+
+  const fetchUserPosts = async () => {
+    setIsLoadingPosts(true);
+    try {
+      const authorName = profileData.email?.split('@')[0] || '';
+      const { data, error } = await supabase
+        .from('posts')
+        .select('*')
+        .eq('author', authorName)
+        .order('created_at', { ascending: false });
+        
+      if (error) throw error;
+      setUserPosts(data || []);
+    } catch (err: any) {
+      console.error(err);
+      alert('Gagal memuat postingan.');
+    } finally {
+      setIsLoadingPosts(false);
+    }
+  };
+
+  const handleEditPost = async (post: any) => {
+    const newContent = await showModal({
+      type: 'prompt',
+      title: 'Edit Postingan',
+      message: 'Ubah teks postingan Anda di bawah ini:',
+      defaultValue: post.content,
+      confirmText: 'Simpan Perubahan'
+    });
+    if (!newContent || newContent === post.content) return;
+    
+    try {
+      const { error } = await supabase.from('posts').update({ content: newContent }).eq('id', post.id);
+      if (error) throw error;
+      setUserPosts(prev => prev.map(p => p.id === post.id ? { ...p, content: newContent } : p));
+      await showModal({ type: 'alert', title: 'Berhasil', message: 'Postingan berhasil diedit!', confirmText: 'OK' });
+    } catch (err: any) {
+      await showModal({ type: 'alert', title: 'Gagal', message: 'Gagal mengedit postingan: ' + err.message, confirmText: 'Tutup', confirmColor: 'bg-rose-500' });
+    }
+  };
+
+  const handleDeleteMyPost = async (postId: string) => {
+    const confirmed = await showModal({
+      type: 'confirm',
+      title: 'Hapus Postingan',
+      message: 'Apakah Anda yakin ingin menghapus postingan ini? Tindakan ini tidak dapat dibatalkan.',
+      confirmText: 'Hapus',
+      confirmColor: 'bg-rose-500'
+    });
+    if (!confirmed) return;
+    
+    try {
+      await supabase.from('post_comments').delete().eq('post_id', postId);
+      await supabase.from('post_likes').delete().eq('post_id', postId);
+      
+      const { error } = await supabase.from('posts').delete().eq('id', postId);
+      if (error) throw error;
+      
+      setUserPosts(prev => prev.filter(p => p.id !== postId));
+      await showModal({ type: 'alert', title: 'Berhasil', message: 'Postingan berhasil dihapus!', confirmText: 'OK' });
+    } catch (err: any) {
+      await showModal({ type: 'alert', title: 'Gagal', message: 'Gagal menghapus postingan: ' + err.message, confirmText: 'Tutup', confirmColor: 'bg-rose-500' });
+    }
+  };
+
+  useEffect(() => {
+    const loadProfile = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        setProfileData(prev => ({
+          ...prev,
+          name: user.user_metadata?.name || prev.name,
+          bio: user.user_metadata?.bio || prev.bio,
+          location: user.user_metadata?.location || prev.location,
+          phone: user.user_metadata?.phone || prev.phone,
+          avatar: user.user_metadata?.avatar || prev.avatar,
+          email: user.email || prev.email,
+          joinDate: user.created_at ? new Date(user.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : prev.joinDate,
+        }));
+      }
+    };
+    loadProfile();
+  }, []);
+
+  const handleSaveProfile = async () => {
+    setIsSaving(true);
+    try {
+      const { error } = await supabase.auth.updateUser({
+        data: {
+          name: profileData.name,
+          bio: profileData.bio,
+          location: profileData.location,
+          phone: profileData.phone,
+          avatar: profileData.avatar,
+        }
+      });
+      if (error) {
+        alert('Gagal menyimpan profil: ' + error.message);
+      } else {
+        setActiveSubView('profile');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Terjadi kesalahan saat menyimpan.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setIsSaving(true);
+
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Math.random().toString(36).substring(2, 15)}.${fileExt}`;
+      const filePath = `${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(filePath, file);
+
+      if (uploadError) {
+        throw uploadError;
+      }
+
+      const { data } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(filePath);
+
+      setProfileData(prev => ({ ...prev, avatar: data.publicUrl }));
+    } catch (error: any) {
+      alert('Gagal mengupload gambar: ' + error.message);
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  const handleChangeEmail = async () => {
+    const newEmail = await showModal({
+      type: 'prompt',
+      title: 'Ubah Email',
+      message: 'Masukkan email baru Anda:',
+      defaultValue: profileData.email,
+      confirmText: 'Simpan Email'
+    });
+    if (!newEmail || newEmail === profileData.email) return;
+
+    try {
+      setIsSaving(true);
+      const { error } = await supabase.auth.updateUser({ email: newEmail });
+      if (error) throw error;
+      setProfileData(prev => ({ ...prev, email: newEmail }));
+      await showModal({ type: 'alert', title: 'Berhasil', message: 'Berhasil mengubah email. Anda mungkin perlu melakukan verifikasi pada email baru Anda.', confirmText: 'OK' });
+    } catch (err: any) {
+      await showModal({ type: 'alert', title: 'Gagal', message: 'Gagal mengubah email: ' + err.message, confirmText: 'Tutup', confirmColor: 'bg-rose-500' });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleChangePhone = async () => {
+    const newPhone = await showModal({
+      type: 'prompt',
+      title: 'Ubah Nomor HP',
+      message: 'Masukkan nomor HP baru Anda:',
+      defaultValue: profileData.phone,
+      confirmText: 'Simpan Nomor'
+    });
+    if (!newPhone || newPhone === profileData.phone) return;
+
+    try {
+      setIsSaving(true);
+      const { error } = await supabase.auth.updateUser({ data: { phone: newPhone } });
+      if (error) throw error;
+      setProfileData(prev => ({ ...prev, phone: newPhone }));
+      await showModal({ type: 'alert', title: 'Berhasil', message: 'Berhasil mengubah nomor HP.', confirmText: 'OK' });
+    } catch (err: any) {
+      await showModal({ type: 'alert', title: 'Gagal', message: 'Gagal mengubah nomor HP: ' + err.message, confirmText: 'Tutup', confirmColor: 'bg-rose-500' });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleChangePassword = async () => {
+    const newPassword = await showModal({
+      type: 'prompt',
+      title: 'Ubah Kata Sandi',
+      message: 'Masukkan kata sandi baru Anda (minimal 8 karakter):',
+      isPassword: true,
+      confirmText: 'Simpan Sandi'
+    });
+    if (!newPassword) return;
+    
+    if (newPassword.length < 8) {
+      await showModal({ type: 'alert', title: 'Peringatan', message: 'Kata sandi harus minimal 8 karakter.', confirmText: 'Mengerti', confirmColor: 'bg-amber-500' });
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) throw error;
+      await showModal({ type: 'alert', title: 'Berhasil', message: 'Berhasil mengubah kata sandi.', confirmText: 'OK' });
+    } catch (err: any) {
+      await showModal({ type: 'alert', title: 'Gagal', message: 'Gagal mengubah kata sandi: ' + err.message, confirmText: 'Tutup', confirmColor: 'bg-rose-500' });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    const confirmed = await showModal({
+      type: 'confirm',
+      title: 'Hapus Akun Permanen',
+      message: 'Apakah Anda yakin ingin menghapus akun secara permanen? Tindakan ini tidak dapat dibatalkan.',
+      confirmText: 'Hapus Akun',
+      confirmColor: 'bg-rose-500'
+    });
+    if (confirmed) {
+      await showModal({ type: 'alert', title: 'Hubungi Tim Dukungan', message: 'Untuk keamanan, penghapusan akun permanen memerlukan verifikasi. Silakan hubungi tim dukungan kami di support@nemuin.com.', confirmText: 'Mengerti' });
+    }
   };
 
   const renderAdOptions = () => (
@@ -271,22 +533,33 @@ export function ProfileScreen({ isDarkMode, onBack, userRole = 'user', userEmail
           <ChevronLeft className="w-5 h-5" />
         </button>
         <h2 className={`text-lg font-black italic tracking-tighter ${isDarkMode ? 'text-white' : 'text-[#4B2E2A]'}`}>EDIT PROFIL</h2>
-        <button onClick={handleSaveProfile} className="text-[#FF611D] font-black italic text-sm tracking-tighter">SIMPAN</button>
+        <button onClick={handleSaveProfile} disabled={isSaving} className={`font-black italic text-sm tracking-tighter ${isSaving ? 'text-zinc-500' : 'text-[#FF611D]'}`}>
+          {isSaving ? 'MENYIMPAN...' : 'SIMPAN'}
+        </button>
       </div>
 
       <div className="flex-1 overflow-y-auto p-6 space-y-8">
         <div className="flex flex-col items-center">
           <div className="relative group">
-            <div className="w-32 h-32 rounded-[2.5rem] bg-[#FF611D]/10 border-4 border-[#FF611D]/20 overflow-hidden">
-               <img 
-                src="https://images.unsplash.com/photo-1599566150163-29194dcaad36?auto=format&fit=crop&q=80&w=256" 
-                alt="Avatar" 
-                className="w-full h-full object-cover"
-              />
-            </div>
-            <button className="absolute bottom-0 right-0 p-3 bg-[#FF611D] text-white rounded-2xl shadow-lg border-4 border-white dark:border-[#1C1917] active:scale-90 transition-all">
-              <Camera className="w-5 h-5" />
-            </button>
+            <label className="cursor-pointer block relative">
+              <div className="w-32 h-32 rounded-[2.5rem] bg-[#FF611D]/10 border-4 border-[#FF611D]/20 overflow-hidden relative">
+                <img 
+                  src={profileData.avatar || `https://ui-avatars.com/api/?name=${profileData.name || 'User'}&background=random`} 
+                  alt="Avatar" 
+                  className={`w-full h-full object-cover transition-all ${isSaving ? 'opacity-50 blur-sm' : ''}`}
+                  onError={(e) => { (e.target as HTMLImageElement).src = 'https://ui-avatars.com/api/?name=User&background=random' }}
+                />
+                {isSaving && (
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  </div>
+                )}
+              </div>
+              <div className="absolute bottom-0 right-0 p-3 bg-[#FF611D] text-white rounded-2xl shadow-lg border-4 border-white dark:border-[#1C1917] active:scale-90 transition-all">
+                <Camera className="w-5 h-5" />
+              </div>
+              <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" disabled={isSaving} />
+            </label>
           </div>
           <p className="mt-4 text-xs font-bold text-[#78716C]/60 uppercase tracking-widest">Sentuh untuk ganti foto</p>
         </div>
@@ -317,6 +590,16 @@ export function ProfileScreen({ isDarkMode, onBack, userRole = 'user', userEmail
               type="text" 
               value={profileData.location}
               onChange={(e) => setProfileData({...profileData, location: e.target.value})}
+              className={`w-full h-14 bg-transparent border-b-2 font-bold px-1 transition-all focus:border-[#FF611D] outline-none ${isDarkMode ? 'text-white border-[#404040]' : 'text-[#4B2E2A] border-[#E7E5E4]'}`}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className={`text-[10px] font-black uppercase tracking-[0.2em] ${isDarkMode ? 'text-[#A8A29E]' : 'text-[#78716C]'}`}>Nomor HP</label>
+            <input 
+              type="text" 
+              value={profileData.phone}
+              onChange={(e) => setProfileData({...profileData, phone: e.target.value})}
               className={`w-full h-14 bg-transparent border-b-2 font-bold px-1 transition-all focus:border-[#FF611D] outline-none ${isDarkMode ? 'text-white border-[#404040]' : 'text-[#4B2E2A] border-[#E7E5E4]'}`}
             />
           </div>
@@ -427,7 +710,7 @@ export function ProfileScreen({ isDarkMode, onBack, userRole = 'user', userEmail
                   <p className={`text-[10px] font-black uppercase tracking-widest ${isDarkMode ? 'text-[#78716C]' : 'text-[#78716C]'}`}>Email</p>
                   <p className={`text-sm font-bold mt-1 ${isDarkMode ? 'text-white' : 'text-[#4B2E2A]'}`}>{profileData.email}</p>
                 </div>
-                <button className="text-[10px] font-black text-[#FF611D] uppercase">Ubah</button>
+                <button onClick={handleChangeEmail} disabled={isSaving} className="text-[10px] font-black text-[#FF611D] uppercase">Ubah</button>
               </div>
 
               <div className="flex justify-between items-center pb-4 border-b border-dashed border-[#E7E5E4] dark:border-[#404040]">
@@ -435,7 +718,7 @@ export function ProfileScreen({ isDarkMode, onBack, userRole = 'user', userEmail
                   <p className={`text-[10px] font-black uppercase tracking-widest ${isDarkMode ? 'text-[#78716C]' : 'text-[#78716C]'}`}>Nomor HP</p>
                   <p className={`text-sm font-bold mt-1 ${isDarkMode ? 'text-white' : 'text-[#4B2E2A]'}`}>{profileData.phone}</p>
                 </div>
-                <button className="text-[10px] font-black text-[#FF611D] uppercase">Ubah</button>
+                <button onClick={handleChangePhone} disabled={isSaving} className="text-[10px] font-black text-[#FF611D] uppercase">Ubah</button>
               </div>
 
               <div className="flex justify-between items-center">
@@ -451,21 +734,135 @@ export function ProfileScreen({ isDarkMode, onBack, userRole = 'user', userEmail
             <h3 className={`text-xs font-black uppercase tracking-[0.2em] mb-6 ${isDarkMode ? 'text-[#FF611D]' : 'text-[#FF611D]'}`}>Keamanan</h3>
             
             <div className="space-y-4">
-              <button className={`w-full p-4 rounded-xl flex items-center justify-between border ${isDarkMode ? 'bg-[#1C1917] border-[#404040]' : 'bg-white border-[#E7E5E4]'}`}>
+              <button onClick={handleChangePassword} disabled={isSaving} className={`w-full p-4 rounded-xl flex items-center justify-between border transition-colors ${isDarkMode ? 'bg-[#1C1917] border-[#404040] hover:bg-[#333333]' : 'bg-white border-[#E7E5E4] hover:bg-[#F6F1EA]'}`}>
                 <span className={`text-xs font-bold ${isDarkMode ? 'text-white' : 'text-[#4B2E2A]'}`}>Ubah Kata Sandi</span>
                 <ChevronRight className="w-4 h-4 text-[#A8A29E]" />
-              </button>
-              <button className={`w-full p-4 rounded-xl flex items-center justify-between border ${isDarkMode ? 'bg-[#1C1917] border-[#404040]' : 'bg-white border-[#E7E5E4]'}`}>
-                <span className={`text-xs font-bold ${isDarkMode ? 'text-white' : 'text-[#4B2E2A]'}`}>Otentikasi Dua Faktor</span>
-                <div className="px-2 py-0.5 bg-[#FF611D]/10 text-[#FF611D] text-[8px] font-black rounded-full">AKTIF</div>
               </button>
             </div>
           </div>
 
-          <button className="w-full py-4 text-rose-500 text-[10px] font-black uppercase tracking-widest border-2 border-rose-500/20 rounded-2xl hover:bg-rose-500/5 transition-all">
+          <button onClick={handleDeleteAccount} className="w-full py-4 text-rose-500 text-[10px] font-black uppercase tracking-widest border-2 border-rose-500/20 rounded-2xl hover:bg-rose-500/5 transition-all">
             HAPUS AKUN PERMANEN
           </button>
         </div>
+      </div>
+    </motion.div>
+  );
+
+  const renderPosts = () => (
+    <motion.div 
+      initial={{ x: '100%' }}
+      animate={{ x: 0 }}
+      exit={{ x: '100%' }}
+      transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+      className={`fixed inset-0 z-[120] flex flex-col ${isDarkMode ? 'bg-[#1C1917]' : 'bg-white'}`}
+    >
+      <div className={`p-4 flex items-center justify-between border-b mt-10 md:mt-0 ${isDarkMode ? 'border-[#404040]' : 'border-[#E7E5E4]'}`}>
+        <button onClick={() => setActiveSubView('profile')} className={`p-2 rounded-xl border transition-all ${isDarkMode ? 'bg-[#262626] border-[#404040] text-[#A8A29E]' : 'bg-white border-[#E7E5E4] text-[#78716C]'}`}>
+          <ChevronLeft className="w-5 h-5" />
+        </button>
+        <h2 className={`text-lg font-black italic tracking-tighter ${isDarkMode ? 'text-white' : 'text-[#4B2E2A]'}`}>POSTINGAN SAYA</h2>
+        <div className="w-10"></div>
+      </div>
+
+      <div className={`flex-1 overflow-y-auto p-6 space-y-6 ${isDarkMode ? 'bg-[#1C1917]' : 'bg-[#FAF9F6]'}`}>
+        {isLoadingPosts ? (
+          <div className="flex flex-col items-center justify-center mt-20">
+            <div className="w-8 h-8 border-4 border-[#FF611D] border-t-transparent rounded-full animate-spin mb-4"></div>
+            <p className={`text-sm font-bold ${isDarkMode ? 'text-[#A8A29E]' : 'text-[#78716C]'}`}>Memuat postingan...</p>
+          </div>
+        ) : userPosts.length === 0 ? (
+          <div className="flex flex-col items-center justify-center text-center py-20 max-w-sm mx-auto">
+            <div className={`w-20 h-20 rounded-[2rem] flex items-center justify-center mb-6 ${isDarkMode ? 'bg-[#262626] text-[#A8A29E]' : 'bg-[#F6F1EA] text-[#A8A29E]'}`}>
+              <MessageSquare className="w-8 h-8" />
+            </div>
+            <h3 className={`text-xl font-black italic tracking-tighter mb-2 ${isDarkMode ? 'text-white' : 'text-[#4B2E2A]'}`}>
+              Belum ada postingan
+            </h3>
+            <p className={`text-xs font-bold leading-relaxed ${isDarkMode ? 'text-[#A8A29E]' : 'text-[#78716C]'}`}>
+              Anda belum membuat postingan apapun. Yuk, bagikan pengalaman kuliner Anda!
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8 max-w-7xl mx-auto pb-12">
+            {userPosts.map(post => (
+              <div key={post.id} className={`rounded-[2.5rem] overflow-hidden border transition-all duration-500 flex flex-col h-full group ${
+                isDarkMode 
+                  ? 'bg-[#262626] border-[#404040] shadow-[0_0_30px_rgba(255,97,29,0.25)] hover:shadow-[0_0_60px_rgba(255,97,29,0.5)] hover:border-[#FF611D]/50' 
+                  : 'bg-white border-[#E7E5E4] shadow-[0_15px_40px_rgba(255,97,29,0.15)] hover:shadow-[0_25px_60px_rgba(255,97,29,0.35)] hover:border-[#FF611D]/50'
+              }`}>
+                {/* Post Header */}
+                <div className={`p-5 flex items-center justify-between border-b ${isDarkMode ? 'border-[#333333]' : 'border-[#F6F1EA]'}`}>
+                  <div className="flex items-center gap-3">
+                    <img 
+                      src={post.user_avatar} 
+                      alt="Avatar" 
+                      className={`w-10 h-10 rounded-full object-cover border group-hover:scale-110 group-hover:border-[#FF611D] transition-all duration-300 ${isDarkMode ? 'border-[#404040]' : 'border-[#E7E5E4]'}`} 
+                      referrerPolicy="no-referrer"
+                      onError={(e) => { (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${post.author}&background=random` }}
+                    />
+                    <div>
+                      <h3 className={`text-sm font-bold hover:underline cursor-pointer transition-all duration-300 group-hover:text-[#FF611D] group-hover:drop-shadow-[0_0_8px_rgba(255,97,29,0.3)] ${isDarkMode ? 'text-white' : 'text-[#4B2E2A]'}`}>{post.author}</h3>
+                      <p className="text-[10px] text-[#A8A29E] font-bold uppercase tracking-wider">{post.date}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button 
+                      onClick={() => handleEditPost(post)} 
+                      className={`w-8 h-8 rounded-full flex items-center justify-center hover:bg-[#FF611D]/20 active:scale-90 transition-all ${isDarkMode ? 'bg-[#333333] hover:text-[#FF611D]' : 'bg-[#F6F1EA] hover:text-[#FF611D]'}`}
+                      title="Edit Postingan"
+                    >
+                      <Edit className="w-4 h-4 text-[#A8A29E] transition-colors group-hover:text-[#FF611D]" />
+                    </button>
+                    <button 
+                      onClick={() => handleDeleteMyPost(post.id)} 
+                      className="w-8 h-8 rounded-full flex items-center justify-center bg-rose-500/10 hover:bg-rose-500/25 active:scale-90 transition-all"
+                      title="Hapus Postingan"
+                    >
+                      <Trash2 className="w-4 h-4 text-rose-500" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Post Image */}
+                <div className="w-full bg-[#E7E5E4] relative aspect-[4/3] overflow-hidden group">
+                  <img 
+                    src={post.image} 
+                    alt="Post" 
+                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" 
+                    referrerPolicy="no-referrer"
+                    onError={(e) => { (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=800' }}
+                  />
+                  {post.location && (
+                    <div className="absolute bottom-4 left-4 bg-[#4B2E2A]/80 backdrop-blur text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 shadow-lg border border-white/20">
+                      <MapPin className="w-3.5 h-3.5 text-[#FF611D]" />
+                      {post.location}
+                    </div>
+                  )}
+                </div>
+
+                {/* Post Text */}
+                <div className="p-6 flex-1 flex flex-col">
+                  <p className={`text-sm leading-relaxed mb-6 line-clamp-3 italic transition-colors ${isDarkMode ? 'text-[#FAF9F6]' : 'text-[#4B2E2A]'}`}>"{post.content}"</p>
+                  
+                  {/* Actions */}
+                  <div className={`mt-auto flex items-center justify-between border-t pt-5 ${isDarkMode ? 'border-[#333333]' : 'border-[#F6F1EA]'}`}>
+                    <div className="flex gap-4">
+                      <div className="flex items-center gap-2 text-[#78716C]">
+                        <Heart className="w-5 h-5" />
+                        <span className="text-xs font-bold">{post.likes || 0}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-[#78716C]">
+                        <MessageCircle className="w-5 h-5" />
+                        <span className="text-xs font-bold">{post.comments || 0}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </motion.div>
   );
@@ -478,6 +875,7 @@ export function ProfileScreen({ isDarkMode, onBack, userRole = 'user', userEmail
         {activeSubView === 'account' && renderAccount()}
         {activeSubView === 'ad_options' && renderAdOptions()}
         {activeSubView === 'ad_settings' && renderAdSettings()}
+        {activeSubView === 'posts' && renderPosts()}
       </AnimatePresence>
 
       {/* Header Profile */}
@@ -493,18 +891,21 @@ export function ProfileScreen({ isDarkMode, onBack, userRole = 'user', userEmail
         <div className="relative mb-4">
           <div className="w-24 h-24 rounded-full border-4 border-[#FF611D] p-1 bg-white shadow-lg overflow-hidden">
             <img 
-              src="https://images.unsplash.com/photo-1599566150163-29194dcaad36?auto=format&fit=crop&q=80&w=200" 
+              src={profileData.avatar || `https://ui-avatars.com/api/?name=${profileData.name || 'User'}&background=random`} 
               alt="User" 
               className="w-full h-full object-cover rounded-full"
               referrerPolicy="no-referrer"
+              onError={(e) => { (e.target as HTMLImageElement).src = 'https://ui-avatars.com/api/?name=User&background=random' }}
             />
           </div>
           <div className={`absolute bottom-1 right-1 bg-[#FF611D] p-1.5 rounded-full border-2 shadow-sm ${isDarkMode ? 'border-[#262626]' : 'border-white'}`}>
             <Award className="w-4 h-4 text-white" />
           </div>
         </div>
-        <h2 className={`text-xl font-bold transition-colors ${isDarkMode ? 'text-white' : 'text-[#4B2E2A]'}`}>{profileData.name}</h2>
-        <p className={`text-sm font-medium transition-colors mb-4 ${isDarkMode ? 'text-[#A8A29E]' : 'text-[#78716C]'}`}>{profileData.level} • {profileData.location}</p>
+        <h2 className={`text-xl font-bold transition-colors ${isDarkMode ? 'text-white' : 'text-[#4B2E2A]'}`}>{profileData.name || 'Pengguna Baru'}</h2>
+        <p className={`text-sm font-medium transition-colors mb-4 line-clamp-2 px-8 text-center ${isDarkMode ? 'text-[#A8A29E]' : 'text-[#78716C]'}`}>
+          {profileData.bio || 'Belum ada bio.'} {profileData.location ? `• ${profileData.location}` : ''}
+        </p>
         
         <button 
           onClick={() => setActiveSubView('edit')}
@@ -519,24 +920,6 @@ export function ProfileScreen({ isDarkMode, onBack, userRole = 'user', userEmail
         </button>
       </div>
 
-      {/* Stats Area */}
-      <div className={`flex justify-around py-4 border-b shadow-sm transition-colors duration-300 ${isDarkMode ? 'bg-[#1C1917] border-[#404040]' : 'bg-white border-[#E7E5E4]'}`}>
-        <div className="flex flex-col items-center">
-          <span className={`text-lg font-bold transition-colors ${isDarkMode ? 'text-white' : 'text-[#4B2E2A]'}`}>12</span>
-          <span className="text-[10px] uppercase font-bold text-[#A8A29E] tracking-wider">Posts</span>
-        </div>
-        <div className={`w-px h-8 self-center ${isDarkMode ? 'bg-[#404040]' : 'bg-[#E7E5E4]'}`}></div>
-        <div className="flex flex-col items-center">
-          <span className={`text-lg font-bold transition-colors ${isDarkMode ? 'text-white' : 'text-[#4B2E2A]'}`}>482</span>
-          <span className="text-[10px] uppercase font-bold text-[#A8A29E] tracking-wider">Likes</span>
-        </div>
-        <div className={`w-px h-8 self-center ${isDarkMode ? 'bg-[#404040]' : 'bg-[#E7E5E4]'}`}></div>
-        <div className="flex flex-col items-center">
-          <span className={`text-lg font-bold transition-colors ${isDarkMode ? 'text-white' : 'text-[#4B2E2A]'}`}>45</span>
-          <span className="text-[10px] uppercase font-bold text-[#A8A29E] tracking-wider">Comments</span>
-        </div>
-      </div>
-
       {/* Profile Sections */}
       <div className="p-4 flex flex-col gap-6 pb-24">
         {/* Menu Section */}
@@ -545,8 +928,7 @@ export function ProfileScreen({ isDarkMode, onBack, userRole = 'user', userEmail
           <div className="flex flex-col gap-2">
             {[
               { icon: User, label: 'Akun', color: 'text-amber-500', action: () => setActiveSubView('account') },
-              { icon: Heart, label: 'Koleksi Tersimpan', color: 'text-rose-500', action: () => {} },
-              { icon: MessageSquare, label: 'Ulasan Anda', color: 'text-blue-500', action: () => {} },
+              { icon: Heart, label: 'Postingan', color: 'text-rose-500', action: () => setActiveSubView('posts') },
               { icon: Crown, label: 'Langganan Iklan', color: 'text-[#FF611D]', action: () => setActiveSubView('ad_options') },
               { icon: LogOut, label: 'Keluar', color: 'text-rose-600', action: () => { if (onLogout) onLogout(); } },
             ].map((item, idx) => (
@@ -571,6 +953,73 @@ export function ProfileScreen({ isDarkMode, onBack, userRole = 'user', userEmail
           </div>
         </div>
       </div>
+
+      {/* Global Modal Overlay */}
+      <AnimatePresence>
+        {modalConfig && modalConfig.isOpen && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+          >
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className={`w-full max-w-sm rounded-[2rem] p-6 shadow-2xl border-t border-l border-white/10 ${isDarkMode ? 'bg-[#262626]' : 'bg-white'}`}
+            >
+              <h3 className={`text-lg font-black italic mb-2 tracking-tighter ${isDarkMode ? 'text-white' : 'text-[#4B2E2A]'}`}>{modalConfig.title}</h3>
+              {modalConfig.message && (
+                <p className={`text-xs font-bold leading-relaxed mb-6 ${isDarkMode ? 'text-[#A8A29E]' : 'text-[#78716C]'}`}>{modalConfig.message}</p>
+              )}
+              
+              {modalConfig.type === 'prompt' && (
+                <textarea 
+                  autoFocus
+                  defaultValue={modalConfig.defaultValue}
+                  placeholder={modalConfig.placeholder}
+                  id="modal-input"
+                  className={`w-full min-h-[50px] rounded-2xl p-4 text-sm font-medium border focus:outline-none focus:border-[#FF611D] transition-colors mb-6 resize-y ${isDarkMode ? 'bg-[#333333] border-[#404040] text-white' : 'bg-[#F6F1EA] border-[#E7E5E4] text-[#4B2E2A]'}`}
+                  rows={modalConfig.isPassword ? 1 : (modalConfig.defaultValue && modalConfig.defaultValue.length > 50 ? 4 : 2)}
+                  style={modalConfig.isPassword ? { resize: 'none' } : {}}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      const val = (document.getElementById('modal-input') as HTMLTextAreaElement)?.value;
+                      modalConfig.onConfirm(val);
+                    }
+                  }}
+                />
+              )}
+
+              <div className="flex gap-3">
+                {modalConfig.type !== 'alert' && (
+                  <button 
+                    onClick={() => modalConfig.onCancel?.()}
+                    className={`flex-1 py-3.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 border ${isDarkMode ? 'bg-[#333333] text-[#A8A29E] border-[#404040] hover:bg-[#404040]' : 'bg-[#F6F1EA] text-[#78716C] border-[#E7E5E4] hover:bg-[#E7E5E4]'}`}
+                  >
+                    {modalConfig.cancelText || 'Batal'}
+                  </button>
+                )}
+                <button 
+                  onClick={() => {
+                    if (modalConfig.type === 'prompt') {
+                      const val = (document.getElementById('modal-input') as HTMLTextAreaElement)?.value;
+                      modalConfig.onConfirm(val);
+                    } else {
+                      modalConfig.onConfirm("true");
+                    }
+                  }}
+                  className={`flex-1 py-3.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all text-white shadow-lg hover:opacity-90 active:scale-95 ${modalConfig.confirmColor || 'bg-[#FF611D] shadow-orange-900/20'}`}
+                >
+                  {modalConfig.confirmText || 'Simpan'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

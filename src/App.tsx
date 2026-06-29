@@ -729,7 +729,10 @@ export default function App() {
             {view === 'profile' && (
               <ProfileScreen 
                 isDarkMode={isDarkMode} 
-                onBack={() => setView(prevView)}
+                onBack={() => {
+                  setView(prevView);
+                  fetchRestaurants();
+                }}
                 userRole={currentUser?.role}
                 userEmail={currentUser?.email}
                 onLogout={() => {
