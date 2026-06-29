@@ -760,6 +760,7 @@ export default function App() {
               <UserManagePlacesScreen 
                 isDarkMode={isDarkMode}
                 onBack={() => setView('list')}
+                currentUserEmail={currentUser?.email}
               />
             )}
           </div>

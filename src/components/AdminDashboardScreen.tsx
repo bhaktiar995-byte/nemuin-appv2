@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Home,
   Clock,
@@ -35,6 +35,7 @@ import {
 } from 'recharts';
 import { AdminApprovalScreen } from './AdminApprovalScreen';
 import { AdminKelolaPenggunaScreen } from './AdminKelolaPenggunaScreen';
+import { supabase } from '@/lib/supabase';
 
 interface AdminDashboardScreenProps {
   isDarkMode: boolean;
@@ -132,6 +133,40 @@ const systemRoles = [
 
 export function AdminDashboardScreen({ isDarkMode, onBack, currentUser }: AdminDashboardScreenProps) {
   const [activeMenu, setActiveMenu] = useState('Dashboard');
+  const [pendingCount, setPendingCount] = useState(0);
+  const [pendingApprovalItems, setPendingApprovalItems] = useState<any[]>([]);
+
+  // Fetch pending approval count & items from database
+  useEffect(() => {
+    const fetchPendingData = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('pending_places')
+          .select('*')
+          .eq('status', 'menunggu')
+          .order('created_at', { ascending: false })
+          .limit(4);
+
+        if (!error && data) {
+          setPendingApprovalItems(data);
+        }
+
+        // Get total count
+        const { count, error: countError } = await supabase
+          .from('pending_places')
+          .select('*', { count: 'exact', head: true })
+          .eq('status', 'menunggu');
+
+        if (!countError && count !== null) {
+          setPendingCount(count);
+        }
+      } catch (err) {
+        console.error('Error fetching pending data:', err);
+      }
+    };
+
+    fetchPendingData();
+  }, [activeMenu]);
 
   const menuItems = [
     { id: 'Dashboard', icon: Home, label: 'Dashboard' },
@@ -210,7 +245,7 @@ export function AdminDashboardScreen({ isDarkMode, onBack, currentUser }: AdminD
             {[
               { title: 'Total Pengguna', value: '1.250', subtitle: '+12 dari minggu lalu', icon: Users, color: 'text-orange-500', bg: 'bg-orange-50', trend: true },
               { title: 'Total Tempat Makan', value: '532', subtitle: 'Dipublish', icon: Store, color: 'text-orange-500', bg: 'bg-orange-50', trend: null },
-              { title: 'Pending Approval', value: '18', subtitle: 'Menunggu ACC', icon: Hourglass, color: 'text-orange-500', bg: 'bg-orange-50', trend: false },
+              { title: 'Pending Approval', value: String(pendingCount), subtitle: 'Menunggu ACC', icon: Hourglass, color: 'text-orange-500', bg: 'bg-orange-50', trend: false },
               { title: 'Total Review', value: '8.231', subtitle: '+102 dari minggu lalu', icon: Star, color: 'text-green-500', bg: 'bg-green-50', trend: true },
             ].map((card, i) => (
               <div key={i} className={`${surfaceColor} p-6 rounded-2xl border ${borderColor} flex items-center gap-5 shadow-sm`}>
@@ -292,29 +327,41 @@ export function AdminDashboardScreen({ isDarkMode, onBack, currentUser }: AdminD
                 </button>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-                {pendingApprovals.map((item) => (
+                {(pendingApprovalItems.length > 0 ? pendingApprovalItems : []).map((item: any) => (
                   <div key={item.id} className={`border ${borderColor} rounded-xl overflow-hidden hover:shadow-md transition-shadow`}>
                     <div className="h-28 w-full relative">
-                      <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
+                      {item.image ? (
+                        <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className={`w-full h-full flex items-center justify-center ${isDarkMode ? 'bg-[#333333]' : 'bg-gray-100'}`}>
+                          <Store className={`w-8 h-8 ${mutedColor}`} />
+                        </div>
+                      )}
                     </div>
                     <div className="p-3">
                       <h4 className={`font-bold text-sm mb-1 truncate ${textColor}`}>{item.name}</h4>
                       <div className={`text-[10px] space-y-0.5 ${mutedColor}`}>
-                        <p>Kategori: {item.category}</p>
-                        <p className="truncate">Pengaju: {item.submitter}</p>
-                        <p>{item.date}</p>
+                        <p>Kategori: {item.type}</p>
+                        <p className="truncate">Pengaju: {item.submitter_name || item.submitter_email}</p>
+                        <p>Diajukan: {new Date(item.created_at).toLocaleDateString('id-ID')}</p>
                       </div>
                       <div className="flex gap-2 mt-3">
-                        <button className="flex-1 bg-[#FF611D] text-white text-[10px] font-bold py-1.5 rounded-md flex items-center justify-center gap-1 hover:bg-orange-600">
-                          <Check className="w-3 h-3" /> Publish
-                        </button>
-                        <button className="flex-1 border border-red-200 text-red-500 text-[10px] font-bold py-1.5 rounded-md flex items-center justify-center gap-1 hover:bg-red-50">
-                          <X className="w-3 h-3" /> Tolak
+                        <button 
+                          onClick={() => setActiveMenu('Approval')}
+                          className="flex-1 bg-[#FF611D] text-white text-[10px] font-bold py-1.5 rounded-md flex items-center justify-center gap-1 hover:bg-orange-600"
+                        >
+                          <Check className="w-3 h-3" /> Review
                         </button>
                       </div>
                     </div>
                   </div>
                 ))}
+                {pendingApprovalItems.length === 0 && (
+                  <div className={`col-span-4 py-12 flex flex-col items-center justify-center gap-2 ${mutedColor}`}>
+                    <Store className="w-8 h-8 opacity-30" />
+                    <p className="text-xs font-bold">Belum ada pengajuan baru.</p>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -452,7 +499,7 @@ export function AdminDashboardScreen({ isDarkMode, onBack, currentUser }: AdminD
           </div>
         )}
         {activeMenu === 'Approval' && (
-          <AdminApprovalScreen isDarkMode={isDarkMode} />
+          <AdminApprovalScreen isDarkMode={isDarkMode} currentUserEmail={currentUser?.email} />
         )}
 
         {activeMenu === 'KelolaPengguna' && (

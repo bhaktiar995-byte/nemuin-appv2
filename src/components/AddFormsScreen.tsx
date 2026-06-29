@@ -162,9 +162,25 @@ export function AddFormsScreen({ type, onBack, onSuccess, isDarkMode, currentUse
       if (type === 'resto') {
         const categories = selectedCategory === 'Lainnya' ? [customCategory] : [selectedCategory];
         
-        // Insert Restaurant
-        const { data: restoData, error: restoError } = await supabase
-          .from('restaurants')
+        // Build menu items as JSONB array for pending_places
+        const menuJsonb = await Promise.all(menuItems.map(async (item) => {
+          let itemImageUrl = '';
+          if (menuFiles[item.id]) {
+            itemImageUrl = await uploadImage(menuFiles[item.id]);
+          }
+          return {
+            name: item.name,
+            price: parseFloat(item.price.replace(/[^\d]/g, '') || "0"),
+            image: itemImageUrl,
+            description: '',
+            category: 'Main Course'
+          };
+        }));
+
+        // Insert into pending_places (awaiting admin approval)
+        const submitterName = currentUser?.email?.split('@')[0] || 'User';
+        const { error: pendingError } = await supabase
+          .from('pending_places')
           .insert({
             name: formData.get('nama_tempat'),
             type: categories[0],
@@ -176,35 +192,15 @@ export function AddFormsScreen({ type, onBack, onSuccess, isDarkMode, currentUse
             phone: formData.get('phone'),
             hours: formData.get('hours'),
             image: imageUrl,
-            rating: 0,
-            review_count: 0,
-            is_available_online: true
-          })
-          .select()
-          .single();
+            submitter_email: currentUser?.email || 'unknown@email.com',
+            submitter_name: submitterName,
+            status: 'menunggu',
+            menu_items: menuJsonb
+          });
 
-        if (restoError) throw restoError;
+        if (pendingError) throw pendingError;
 
-        // Insert Menu Items
-        if (menuItems.length > 0) {
-          const menuToInsert = await Promise.all(menuItems.map(async (item) => {
-            let itemImageUrl = '';
-            if (menuFiles[item.id]) {
-              itemImageUrl = await uploadImage(menuFiles[item.id]);
-            }
-            return {
-              restaurant_id: restoData.id,
-              name: item.name,
-              price: parseFloat(item.price.replace(/[^\d]/g, '') || "0"),
-              image: itemImageUrl,
-              description: '',
-              category: 'Main Course'
-            };
-          }));
-
-          const { error: menuError } = await supabase.from('menu_items').insert(menuToInsert);
-          if (menuError) throw menuError;
-        }
+        alert('✅ Tempat makan berhasil diajukan! Menunggu persetujuan admin.');
       } else {
         // Extract display name from email or use default
         const authorName = currentUser?.email?.split('@')[0] || 'Community User';
