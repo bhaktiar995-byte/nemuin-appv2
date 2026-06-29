@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ChevronLeft, MapPin, Clock, Phone, Star, Share, MessageCircle, X, Trash2 } from 'lucide-react';
+import { ChevronLeft, MapPin, Clock, Phone, Star, Share, MessageCircle, X, Trash2, Check } from 'lucide-react';
 import { Restaurant, MenuItem, calculateDistance } from '../data/mock';
 import { MapContainer, TileLayer, Marker, useMap } from 'react-leaflet';
 import L from 'leaflet';
@@ -46,6 +46,32 @@ export function DetailScreen({ restaurant, onBack, onChat, onUpdateRestaurant, o
   const [localMenu, setLocalMenu] = useState(restaurant.menu);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showToast, setShowToast] = useState(false);
+
+  const handleShare = async () => {
+    const shareUrl = `${window.location.origin}${window.location.pathname}?restaurantId=${restaurant.id}`;
+    const shareData = {
+      title: restaurant.name,
+      text: `Yuk cek kuliner lezat ini di Nemuin: ${restaurant.name}!`,
+      url: shareUrl
+    };
+
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData);
+      } catch (err) {
+        console.log('Error sharing:', err);
+      }
+    } else {
+      try {
+        await navigator.clipboard.writeText(shareUrl);
+        setShowToast(true);
+        setTimeout(() => setShowToast(false), 2000);
+      } catch (err) {
+        console.error('Failed to copy link:', err);
+      }
+    }
+  };
   
   // Calculate average rating from menu items
   const menuRatings = localMenu.filter(m => m.rating !== undefined).map(m => m.rating!);
@@ -140,7 +166,11 @@ export function DetailScreen({ restaurant, onBack, onChat, onUpdateRestaurant, o
           >
             <ChevronLeft className="w-8 h-8" />
           </button>
-          <button className="w-12 h-12 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center text-white hover:bg-[#FF611D] transition-all hover:scale-110 active:scale-95 shadow-lg border border-white/20" title="Bagikan">
+          <button 
+            onClick={handleShare}
+            className="w-12 h-12 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center text-white hover:bg-[#FF611D] transition-all hover:scale-110 active:scale-95 shadow-lg border border-white/20" 
+            title="Bagikan"
+          >
             <Share className="w-6 h-6" />
           </button>
         </div>
@@ -339,6 +369,14 @@ export function DetailScreen({ restaurant, onBack, onChat, onUpdateRestaurant, o
               </div>
             </div>
           </div>
+        </div>
+      )}
+      
+      {/* Toast Notification */}
+      {showToast && (
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[9999] flex items-center gap-2 bg-[#FF611D] text-white px-6 py-3 rounded-full shadow-2xl animate-in fade-in slide-in-from-bottom duration-300">
+          <Check className="w-4 h-4 shrink-0" />
+          <span className="text-xs font-black italic tracking-tighter">TAUTAN DISALIN KE CLIPBOARD!</span>
         </div>
       )}
     </div>

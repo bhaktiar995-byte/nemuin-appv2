@@ -36,21 +36,6 @@ export function LoginScreen({ onLogin, isDarkMode }: LoginScreenProps) {
     const inputEmail = email.trim();
     const inputPassword = password.trim();
 
-    // 1. Check for exact Admin credentials requested:
-    // Email: ADMIN NEMUIN 333
-    // Password: NEMUIN.APP 2
-    if (
-      activeTab === 'login' &&
-      inputEmail === 'ADMIN NEMUIN 333' && 
-      inputPassword === 'NEMUIN.APP 2'
-    ) {
-      setSuccess('Berhasil masuk sebagai Admin!');
-      setTimeout(() => {
-        onLogin('admin', 'ADMIN NEMUIN 333');
-        setLoading(false);
-      }, 1000);
-      return;
-    }
 
     // 2. Validate input existence for login
     if (activeTab === 'login') {

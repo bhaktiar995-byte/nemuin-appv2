@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Heart, MessageCircle, MapPin, Share2, UtensilsCrossed, X, Send, RefreshCw } from 'lucide-react';
+import { Heart, MessageCircle, MapPin, Share2, UtensilsCrossed, X, Send, RefreshCw, Check, Trash2 } from 'lucide-react';
 import { FoodPost } from '../data/mock';
 import { supabase } from '../lib/supabase';
 
@@ -10,13 +10,56 @@ interface FeedScreenProps {
   isSeeding?: boolean;
   onCommentStateChange?: (isOpen: boolean) => void;
   currentUser?: { email: string; role: 'user' | 'admin' } | null;
+  onDeletePost?: (postId: string) => Promise<void>;
 }
 
-export function FeedScreen({ posts, isDarkMode, onSeed, isSeeding, onCommentStateChange, currentUser }: FeedScreenProps) {
+export function FeedScreen({ posts, isDarkMode, onSeed, isSeeding, onCommentStateChange, currentUser, onDeletePost }: FeedScreenProps) {
   const [showComments, setShowComments] = useState<string | null>(null);
   const [commentText, setCommentText] = useState('');
   const [localPosts, setLocalPosts] = useState<FoodPost[]>(posts);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showToast, setShowToast] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleShare = async (postId: string, postTitle: string) => {
+    const shareUrl = `${window.location.origin}${window.location.pathname}?postId=${postId}`;
+    const shareData = {
+      title: 'Postingan Kuliner Nemuin',
+      text: `Lihat postingan kuliner seru dari "${postTitle}" di Nemuin! 🤤`,
+      url: shareUrl
+    };
+
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData);
+      } catch (err) {
+        console.log('Error sharing:', err);
+      }
+    } else {
+      try {
+        await navigator.clipboard.writeText(shareUrl);
+        setShowToast(true);
+        setTimeout(() => setShowToast(false), 2000);
+      } catch (err) {
+        console.error('Failed to copy link:', err);
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (localPosts.length > 0) {
+      const params = new URLSearchParams(window.location.search);
+      const postId = params.get('postId');
+      if (postId && localPosts.some(p => p.id === postId)) {
+        setShowComments(postId);
+        // Clear query parameter
+        const url = new URL(window.location.href);
+        url.searchParams.delete('postId');
+        window.history.replaceState({}, '', url.pathname + url.search);
+      }
+    }
+  }, [localPosts]);
   
   const getLikesKey = () => `nemuin_likes_${currentUser?.email || 'guest'}`;
 
@@ -318,8 +361,23 @@ export function FeedScreen({ posts, isDarkMode, onSeed, isSeeding, onCommentStat
                       <p className="text-[10px] text-[#A8A29E] font-bold uppercase tracking-wider">{post.timeAgo}</p>
                     </div>
                   </div>
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center ${isDarkMode ? 'bg-[#333333]' : 'bg-[#F6F1EA]'}`}>
-                    <Share2 className="w-4 h-4 text-[#A8A29E]" />
+                  <div className="flex items-center gap-2">
+                    <button 
+                      onClick={() => handleShare(post.id, post.user)}
+                      className={`w-8 h-8 rounded-full flex items-center justify-center hover:bg-[#FF611D]/20 active:scale-90 transition-all ${isDarkMode ? 'bg-[#333333] hover:text-[#FF611D]' : 'bg-[#F6F1EA] hover:text-[#FF611D]'}`}
+                      title="Bagikan Postingan"
+                    >
+                      <Share2 className="w-4 h-4 text-[#A8A29E] transition-colors" />
+                    </button>
+                    {onDeletePost && (
+                      <button 
+                        onClick={() => setShowDeleteConfirm(post.id)}
+                        className="w-8 h-8 rounded-full flex items-center justify-center bg-rose-500/10 hover:bg-rose-500/25 active:scale-90 transition-all"
+                        title="Hapus Postingan"
+                      >
+                        <Trash2 className="w-4 h-4 text-rose-500" />
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -461,6 +519,66 @@ export function FeedScreen({ posts, isDarkMode, onSeed, isSeeding, onCommentStat
           </div>
         </div>
       )}
+      
+      {/* Toast Notification */}
+      {showToast && (
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[9999] flex items-center gap-2 bg-[#FF611D] text-white px-6 py-3 rounded-full shadow-2xl animate-in fade-in slide-in-from-bottom duration-300">
+          <Check className="w-4 h-4 shrink-0" />
+          <span className="text-xs font-black italic tracking-tighter">TAUTAN DISALIN KE CLIPBOARD!</span>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (() => {
+        const postToDelete = localPosts.find(p => p.id === showDeleteConfirm);
+        return (
+          <div className="fixed inset-0 z-[500] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setShowDeleteConfirm(null)} />
+            <div className={`relative w-full max-w-sm rounded-[2.5rem] p-8 overflow-hidden shadow-2xl border animate-in zoom-in-95 duration-300 ${isDarkMode ? 'bg-[#1C1917] border-[#404040] text-white' : 'bg-white border-[#E7E5E4] text-[#4B2E2A]'}`}>
+              <div className="text-center space-y-6">
+                <div className="w-16 h-16 bg-rose-100 rounded-full flex items-center justify-center mx-auto text-rose-500">
+                  <Trash2 className="w-8 h-8" />
+                </div>
+                <div className="space-y-2">
+                  <h3 className="text-xl font-black italic tracking-tighter text-rose-500">Hapus Postingan</h3>
+                  <p className={`text-sm font-bold leading-relaxed ${isDarkMode ? 'text-[#A8A29E]' : 'text-[#78716C]'}`}>
+                    Apakah Anda yakin ingin menghapus postingan dari <span className="text-[#FF611D]">{postToDelete?.user || 'pengguna ini'}</span>? Semua komentar dan likes terkait juga akan terhapus.
+                  </p>
+                </div>
+                <div className="flex gap-3 pt-2 animate-in slide-in-from-bottom duration-300">
+                  <button 
+                    onClick={() => setShowDeleteConfirm(null)}
+                    disabled={isDeleting}
+                    className={`flex-1 h-12 rounded-xl text-xs font-black italic tracking-tighter transition-all ${isDarkMode ? 'bg-[#333333] hover:bg-[#404040]' : 'bg-[#F6F1EA] hover:bg-[#E7E5E4]'}`}
+                  >
+                    BATAL
+                  </button>
+                  <button 
+                    onClick={async () => {
+                      setIsDeleting(true);
+                      try {
+                        if (onDeletePost) {
+                          await onDeletePost(showDeleteConfirm);
+                        }
+                        setLocalPosts(prev => prev.filter(p => p.id !== showDeleteConfirm));
+                      } catch (e) {
+                        console.error("Gagal saat menghapus postingan:", e);
+                      } finally {
+                        setIsDeleting(false);
+                        setShowDeleteConfirm(null);
+                      }
+                    }}
+                    disabled={isDeleting}
+                    className="flex-1 h-12 bg-rose-500 text-white rounded-xl text-xs font-black italic tracking-tighter hover:bg-rose-600 transition-all flex items-center justify-center gap-2"
+                  >
+                    {isDeleting ? 'MENGHAPUS...' : 'YA, HAPUS'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

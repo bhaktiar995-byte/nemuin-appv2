@@ -255,6 +255,30 @@ export default function App() {
     fetchRestaurants();
   }, []);
 
+  useEffect(() => {
+    if (restaurants.length > 0) {
+      const params = new URLSearchParams(window.location.search);
+      const restaurantId = params.get('restaurantId');
+      if (restaurantId) {
+        const found = restaurants.find(r => r.id === restaurantId);
+        if (found) {
+          setSelectedRestaurant(found);
+          setIsDetailModalOpen(true);
+          
+          // Clear query parameter
+          const url = new URL(window.location.href);
+          url.searchParams.delete('restaurantId');
+          window.history.replaceState({}, '', url.pathname + url.search);
+        }
+      }
+      
+      const postId = params.get('postId');
+      if (postId) {
+        setView('feed');
+      }
+    }
+  }, [restaurants]);
+
 
   const handleUpdateRestaurant = (updated: Restaurant) => {
     setRestaurants(prev => prev.map(r => r.id === updated.id ? updated : r));
@@ -299,6 +323,45 @@ export default function App() {
     } catch (err: any) {
       console.error("Supabase Delete Error:", err);
       alert("Gagal menghapus tempat kuliner: " + (err.message || "Pastikan policy delete Supabase diizinkan/publik."));
+    }
+  };
+
+  const handleDeletePost = async (postId: string) => {
+    if (!isSupabaseConfigured) return;
+    try {
+      console.log("Deleting comments for post_id:", postId);
+      const { error: commentsError } = await supabase
+        .from('post_comments')
+        .delete()
+        .eq('post_id', postId);
+      if (commentsError) {
+        console.error("Error deleting post comments:", commentsError);
+      }
+
+      console.log("Deleting likes for post_id:", postId);
+      const { error: likesError } = await supabase
+        .from('post_likes')
+        .delete()
+        .eq('post_id', postId);
+      if (likesError) {
+        console.error("Error deleting post likes:", likesError);
+      }
+
+      console.log("Deleting post of id:", postId);
+      const { error: postError } = await supabase
+        .from('posts')
+        .delete()
+        .eq('id', postId);
+
+      if (postError) {
+        throw postError;
+      }
+
+      console.log("Post deleted successfully");
+      await fetchRestaurants();
+    } catch (err: any) {
+      console.error("Supabase Delete Post Error:", err);
+      alert("Gagal menghapus postingan: " + (err.message || "Pastikan policy delete Supabase diizinkan/publik."));
     }
   };
 
@@ -628,6 +691,7 @@ export default function App() {
                 isSeeding={isSeeding}
                 onCommentStateChange={setIsCommentOpen}
                 currentUser={currentUser}
+                onDeletePost={currentUser?.role === 'admin' ? handleDeletePost : undefined}
               />
             )}
             {view === 'create_menu' && (
