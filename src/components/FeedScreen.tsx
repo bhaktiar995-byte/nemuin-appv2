@@ -431,7 +431,7 @@ export function FeedScreen({ posts, isDarkMode, onSeed, isSeeding, onCommentStat
 
       {/* Comment Prototype View (Bottom Sheet overlay) */}
       {showComments && selectedPost && (
-        <div className="absolute inset-0 z-[10000] bg-black/60 flex items-end">
+        <div className="fixed inset-0 z-[10000] bg-black/60 flex items-end">
           <div className={`w-full rounded-t-3xl h-[80%] flex flex-col shadow-2xl animate-in slide-in-from-bottom duration-300 transition-colors ${isDarkMode ? 'bg-[#262626]' : 'bg-white'}`}>
             {/* Sheet Header */}
             <div className={`p-4 flex items-center justify-between border-b ${isDarkMode ? 'border-[#404040]' : 'border-[#E7E5E4]'}`}>
@@ -491,7 +491,7 @@ export function FeedScreen({ posts, isDarkMode, onSeed, isSeeding, onCommentStat
             </div>
 
             {/* Input Fixed at Bottom */}
-            <div className={`p-4 border-t pb-safe flex items-center gap-3 transition-colors ${isDarkMode ? 'bg-[#262626] border-[#404040]' : 'bg-white border-[#E7E5E4]'}`}>
+            <div className={`p-4 border-t flex items-center gap-3 transition-colors ${isDarkMode ? 'bg-[#262626] border-[#404040]' : 'bg-white border-[#E7E5E4]'}`} style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}>
               <div className="w-10 h-10 rounded-full bg-[#4B2E2A] flex items-center justify-center shrink-0">
                 <span className="text-xs font-bold text-white">{userInitials}</span>
               </div>

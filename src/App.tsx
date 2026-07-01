@@ -22,7 +22,7 @@ import { AdminDashboardScreen } from './components/AdminDashboardScreen';
 import { UserManagePlacesScreen } from './components/UserManagePlacesScreen';
 import { Restaurant, FoodPost, calculateDistance } from './data/mock';
 
-type ViewMode = 'map' | 'list' | 'detail' | 'chat' | 'order' | 'feed' | 'create_menu' | 'create_resto' | 'create_post' | 'profile' | 'spin' | 'settings' | 'admin' | 'manage_places';
+type ViewMode = 'map' | 'list' | 'detail' | 'chat' | 'order' | 'feed' | 'create_menu' | 'create_resto' | 'create_post' | 'profile' | 'spin' | 'settings' | 'admin' | 'manage_places' | 'edit_resto';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<{ email: string; role: 'user' | 'admin' } | null>(null);
@@ -43,6 +43,7 @@ export default function App() {
   const [view, setView] = useState<ViewMode>('list');
   const [prevView, setPrevView] = useState<ViewMode>('list');
   const [selectedRestaurant, setSelectedRestaurant] = useState<Restaurant | null>(null);
+  const [placeToEdit, setPlaceToEdit] = useState<any>(null);
   const [cart, setCart] = useState<Record<string, number>>({});
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
@@ -436,14 +437,24 @@ export default function App() {
                 </p>
               </div>
 
-              {/* Mobile Actions: Lucky Spin & Profile */}
+              {/* Mobile Actions: Lucky Spin, Manage Places, & Profile */}
               <div className="flex items-center gap-2 md:hidden">
                 {view === 'list' && (
                   <button 
                     onClick={() => setView('spin')}
                     className="h-10 w-10 bg-[#FF611D] text-white rounded-2xl flex items-center justify-center shadow-lg active:scale-95 transition-all"
+                    title="Lucky Spin"
                   >
                     <RefreshCw className="w-5 h-5 animate-spin-slow" />
+                  </button>
+                )}
+                {view === 'list' && currentUser?.role === 'user' && (
+                  <button 
+                    onClick={() => setView('manage_places')}
+                    className="h-10 w-10 bg-[#FF611D] text-white rounded-2xl flex items-center justify-center shadow-lg active:scale-95 transition-all"
+                    title="Kelola Tempat"
+                  >
+                    <Store className="w-5 h-5" />
                   </button>
                 )}
                 {view === 'list' && currentUser?.role === 'admin' && (
@@ -747,6 +758,8 @@ export default function App() {
                 onToggleDarkMode={() => setIsDarkMode(!isDarkMode)} 
                 onBack={() => setView(prevView)}
                 onNavigateProfile={() => setView('profile')}
+                onNavigateManagePlaces={() => setView('manage_places')}
+                currentUser={currentUser}
               />
             )}
             {view === 'admin' && currentUser?.role === 'admin' && (
@@ -761,6 +774,23 @@ export default function App() {
                 isDarkMode={isDarkMode}
                 onBack={() => setView('list')}
                 currentUserEmail={currentUser?.email}
+                onEditPlace={(place) => {
+                  setPlaceToEdit(place);
+                  setView('edit_resto');
+                }}
+              />
+            )}
+            {view === 'edit_resto' && (
+              <AddFormsScreen 
+                type="resto" 
+                editData={placeToEdit}
+                onBack={() => setView('manage_places')} 
+                onSuccess={() => {
+                  setView('manage_places');
+                  fetchRestaurants();
+                }} 
+                isDarkMode={isDarkMode} 
+                currentUser={currentUser}
               />
             )}
           </div>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, Check, X, MoreVertical, ChevronLeft, ChevronRight, ChevronDown, Hourglass, RefreshCw, Store, Eye, MessageSquare } from 'lucide-react';
+import { Search, Filter, Check, X, MoreVertical, ChevronLeft, ChevronRight, ChevronDown, Hourglass, RefreshCw, Store, Eye, MessageSquare, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
 interface AdminApprovalScreenProps {
@@ -37,6 +37,7 @@ export function AdminApprovalScreen({ isDarkMode, currentUserEmail }: AdminAppro
   const [searchQuery, setSearchQuery] = useState('');
   const [rejectModalId, setRejectModalId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState('');
+  const [deleteConfirm, setDeleteConfirm] = useState<PendingPlace | null>(null);
   const [detailModal, setDetailModal] = useState<PendingPlace | null>(null);
 
   // Fetch all pending_places from Supabase
@@ -159,6 +160,38 @@ export function AdminApprovalScreen({ isDarkMode, currentUserEmail }: AdminAppro
     }
   };
 
+  // Delete a place (by admin)
+  const handleAdminDelete = async (placeId: string) => {
+    setActionLoading(placeId);
+    try {
+      const placeToDelete = places.find(p => p.id === placeId);
+      
+      // Jika status disetujui, kemungkinan ada di tabel restaurants, mari hapus juga
+      if (placeToDelete && placeToDelete.status === 'disetujui') {
+        await supabase
+          .from('restaurants')
+          .delete()
+          .eq('name', placeToDelete.name)
+          .eq('lat', placeToDelete.lat)
+          .eq('lng', placeToDelete.lng);
+      }
+
+      const { error } = await supabase
+        .from('pending_places')
+        .delete()
+        .eq('id', placeId);
+
+      if (error) throw error;
+      setDeleteConfirm(null);
+      await fetchPlaces();
+    } catch (err: any) {
+      console.error('Error deleting place:', err);
+      alert('Gagal menghapus tempat: ' + (err.message || 'Unknown error'));
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   const statusMap: Record<string, string> = {
     'menunggu': 'Menunggu',
     'disetujui': 'Disetujui',
@@ -214,24 +247,24 @@ export function AdminApprovalScreen({ isDarkMode, currentUserEmail }: AdminAppro
   return (
     <div className={`flex-1 flex flex-col h-full overflow-hidden`}>
       {/* Header Area */}
-      <div className="p-8 pb-4 shrink-0 flex justify-between items-start">
+      <div className="p-4 md:p-8 pb-4 shrink-0 flex flex-col md:flex-row justify-between items-start gap-4">
         <div>
-          <h2 className={`text-2xl font-black italic tracking-tight ${textColor} mb-1`}>Approval Tempat Makan</h2>
-          <p className={`text-sm ${mutedColor}`}>Kelola dan verifikasi tempat makan yang diajukan oleh pengguna sebelum dipublish.</p>
+          <h2 className={`text-xl md:text-2xl font-black italic tracking-tight ${textColor} mb-1`}>Approval Tempat Makan</h2>
+          <p className={`text-xs md:text-sm ${mutedColor}`}>Kelola dan verifikasi tempat makan yang diajukan oleh pengguna sebelum dipublish.</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 w-full md:w-auto">
           <button 
             onClick={fetchPlaces}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border ${borderColor} ${surfaceColor} text-sm font-semibold ${mutedColor} hover:text-[#FF611D] transition-colors`}
+            className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border ${borderColor} ${surfaceColor} text-sm font-semibold ${mutedColor} hover:text-[#FF611D] transition-colors`}
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
+            <span className="hidden sm:inline">Refresh</span>
           </button>
-          <div className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border ${borderColor} ${surfaceColor} w-72`}>
+          <div className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border ${borderColor} ${surfaceColor} w-full md:w-72`}>
             <Search className={`w-4 h-4 ${mutedColor}`} />
             <input 
               type="text" 
-              placeholder="Cari tempat makan atau pengaju..." 
+              placeholder="Cari..." 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className={`bg-transparent border-none outline-none text-sm w-full ${textColor} placeholder:${mutedColor}`}
@@ -241,7 +274,7 @@ export function AdminApprovalScreen({ isDarkMode, currentUserEmail }: AdminAppro
       </div>
 
       {/* Tabs */}
-      <div className="px-8 pb-4 shrink-0">
+      <div className="px-4 md:px-8 pb-4 shrink-0 overflow-x-auto whitespace-nowrap">
         <div className={`inline-flex items-center gap-1 p-1.5 rounded-2xl ${surfaceColor} border ${borderColor}`}>
           {tabs.map(tab => {
             const isActive = activeTab === tab.id;
@@ -249,7 +282,7 @@ export function AdminApprovalScreen({ isDarkMode, currentUserEmail }: AdminAppro
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all ${
+                className={`flex items-center gap-2 px-3 md:px-4 py-1.5 md:py-2 rounded-xl text-xs md:text-sm font-bold transition-all ${
                   isActive 
                     ? `shadow-sm ${isDarkMode ? 'bg-zinc-800' : 'bg-white'} ${tab.color}`
                     : `${mutedColor} hover:${isDarkMode ? 'bg-zinc-800/50' : 'bg-gray-50'}`
@@ -258,7 +291,7 @@ export function AdminApprovalScreen({ isDarkMode, currentUserEmail }: AdminAppro
                 {isActive && <tab.icon className="w-4 h-4" />}
                 {!isActive && <tab.icon className="w-4 h-4 opacity-50" />}
                 {tab.label}
-                <span className={`px-2 py-0.5 rounded-lg text-[11px] ${isActive ? tab.bg : (isDarkMode ? 'bg-zinc-800' : 'bg-gray-100')} ${isActive ? tab.color : mutedColor}`}>
+                <span className={`px-2 py-0.5 rounded-lg text-[10px] md:text-[11px] ${isActive ? tab.bg : (isDarkMode ? 'bg-zinc-800' : 'bg-gray-100')} ${isActive ? tab.color : mutedColor}`}>
                   {tab.count}
                 </span>
               </button>
@@ -268,7 +301,7 @@ export function AdminApprovalScreen({ isDarkMode, currentUserEmail }: AdminAppro
       </div>
 
       {/* Table Container */}
-      <div className="flex-1 overflow-hidden px-8 pb-8">
+      <div className="flex-1 overflow-hidden px-4 md:px-8 pb-8">
         <div className={`${surfaceColor} rounded-2xl border ${borderColor} h-full flex flex-col shadow-sm`}>
           {loading ? (
             <div className="flex-1 flex items-center justify-center">
@@ -284,15 +317,15 @@ export function AdminApprovalScreen({ isDarkMode, currentUserEmail }: AdminAppro
           ) : (
             <>
               <div className="overflow-x-auto flex-1">
-                <table className="w-full text-left text-sm whitespace-nowrap">
+                <table className="w-full text-left text-sm whitespace-nowrap min-w-[800px]">
                   <thead className={`sticky top-0 z-10 ${isDarkMode ? 'bg-[#262626]' : 'bg-[#FDFCFB]'}`}>
-                    <tr className={`border-b ${borderColor} ${textColor} text-xs font-bold`}>
-                      <th className="px-6 py-4">Tempat Makan</th>
-                      <th className="px-6 py-4">Kategori</th>
-                      <th className="px-6 py-4">Pengaju</th>
-                      <th className="px-6 py-4">Tanggal Pengajuan</th>
-                      <th className="px-6 py-4">Status</th>
-                      <th className="px-6 py-4 text-center">Aksi</th>
+                    <tr className={`border-b ${borderColor} ${textColor} text-[10px] md:text-xs font-bold uppercase tracking-wider`}>
+                      <th className="px-4 md:px-6 py-3 md:py-4">Tempat Makan</th>
+                      <th className="px-4 md:px-6 py-3 md:py-4">Kategori</th>
+                      <th className="px-4 md:px-6 py-3 md:py-4">Pengaju</th>
+                      <th className="px-4 md:px-6 py-3 md:py-4">Tanggal Pengajuan</th>
+                      <th className="px-4 md:px-6 py-3 md:py-4">Status</th>
+                      <th className="px-4 md:px-6 py-3 md:py-4 text-center">Aksi</th>
                     </tr>
                   </thead>
                   <tbody className={`divide-y ${isDarkMode ? 'divide-[#404040]' : 'divide-gray-100'}`}>
@@ -353,6 +386,12 @@ export function AdminApprovalScreen({ isDarkMode, currentUserEmail }: AdminAppro
                             {item.status === 'menunggu' ? (
                               <>
                                 <button 
+                                  onClick={() => setDetailModal(item)}
+                                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border ${borderColor} ${mutedColor} text-xs font-bold hover:text-[#FF611D] transition-colors`}
+                                >
+                                  <Eye className="w-3.5 h-3.5" /> Detail
+                                </button>
+                                <button 
                                   onClick={() => handleApprove(item)}
                                   disabled={actionLoading === item.id}
                                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#FF611D] text-white text-xs font-bold hover:bg-orange-600 transition-colors shadow-sm disabled:opacity-50"
@@ -373,12 +412,26 @@ export function AdminApprovalScreen({ isDarkMode, currentUserEmail }: AdminAppro
                                 </button>
                               </>
                             ) : (
-                              <button 
-                                onClick={() => setDetailModal(item)}
-                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border ${borderColor} ${mutedColor} text-xs font-bold hover:text-[#FF611D] transition-colors`}
-                              >
-                                <Eye className="w-3.5 h-3.5" /> Detail
-                              </button>
+                              <>
+                                <button 
+                                  onClick={() => setDetailModal(item)}
+                                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border ${borderColor} ${mutedColor} text-xs font-bold hover:text-[#FF611D] transition-colors`}
+                                >
+                                  <Eye className="w-3.5 h-3.5" /> Detail
+                                </button>
+                                <button 
+                                  onClick={() => handleAdminDelete(item.id)}
+                                  disabled={actionLoading === item.id}
+                                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-200 text-red-500 ${isDarkMode ? 'bg-transparent hover:bg-red-500/10' : 'bg-white hover:bg-red-50'} text-xs font-bold transition-colors shadow-sm disabled:opacity-50`}
+                                >
+                                  {actionLoading === item.id ? (
+                                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                  ) : (
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  )}
+                                  Hapus
+                                </button>
+                              </>
                             )}
                           </div>
                         </td>
@@ -425,6 +478,37 @@ export function AdminApprovalScreen({ isDarkMode, currentUserEmail }: AdminAppro
                 className="flex-1 h-11 bg-red-500 text-white rounded-xl text-sm font-bold hover:bg-red-600 transition-colors disabled:opacity-50"
               >
                 {actionLoading === rejectModalId ? 'Memproses...' : 'Tolak Pengajuan'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirm Modal */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setDeleteConfirm(null)} />
+          <div className={`relative w-full max-w-sm rounded-2xl p-6 text-center shadow-2xl border ${isDarkMode ? 'bg-[#262626] border-[#404040]' : 'bg-white border-[#E7E5E4]'}`}>
+            <div className="w-16 h-16 rounded-full bg-rose-100 text-rose-500 flex items-center justify-center mx-auto mb-4 border-4 border-white dark:border-[#262626] shadow-sm">
+              <Trash2 className="w-8 h-8" />
+            </div>
+            <h3 className="text-xl font-black italic tracking-tighter text-rose-500 mb-2">Hapus Pengajuan</h3>
+            <p className={`text-sm mb-6 ${mutedColor}`}>
+              Apakah Anda yakin ingin menghapus pengajuan <span className="text-[#FF611D] font-bold">{deleteConfirm.name}</span>? Tindakan ini tidak dapat dibatalkan.
+            </p>
+            <div className="flex gap-3">
+              <button 
+                onClick={() => setDeleteConfirm(null)}
+                className={`flex-1 h-11 rounded-xl text-sm font-bold border ${borderColor} ${mutedColor} transition-colors hover:${isDarkMode ? 'bg-zinc-800' : 'bg-gray-50'}`}
+              >
+                Batal
+              </button>
+              <button 
+                onClick={() => handleAdminDelete(deleteConfirm.id)}
+                disabled={actionLoading === deleteConfirm.id}
+                className="flex-1 h-11 bg-rose-500 text-white rounded-xl text-sm font-bold hover:bg-rose-600 transition-colors shadow-sm disabled:opacity-50"
+              >
+                {actionLoading === deleteConfirm.id ? 'MENGHAPUS...' : 'YA, HAPUS'}
               </button>
             </div>
           </div>

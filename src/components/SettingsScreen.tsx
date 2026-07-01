@@ -1,10 +1,12 @@
-import { Moon, Sun, ChevronLeft, Bell, Shield, User } from 'lucide-react';
+import { Moon, Sun, ChevronLeft, Bell, Shield, User, Store } from 'lucide-react';
 
 interface SettingsScreenProps {
   isDarkMode: boolean;
   onToggleDarkMode: () => void;
   onBack: () => void;
   onNavigateProfile: () => void;
+  onNavigateManagePlaces?: () => void;
+  currentUser?: { email: string; role: 'user' | 'admin' } | null;
 }
 
 export function SettingsScreen({ isDarkMode, onToggleDarkMode, onBack, onNavigateProfile }: SettingsScreenProps) {

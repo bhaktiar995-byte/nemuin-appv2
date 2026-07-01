@@ -28,6 +28,7 @@ interface ManagePlacesProps {
   onBack: () => void;
   isDarkMode?: boolean;
   currentUserEmail?: string;
+  onEditPlace?: (place: PendingPlace) => void;
 }
 
 interface PendingPlace {
@@ -53,7 +54,7 @@ interface PendingPlace {
   updated_at: string;
 }
 
-export function UserManagePlacesScreen({ onBack, isDarkMode, currentUserEmail }: ManagePlacesProps) {
+export function UserManagePlacesScreen({ onBack, isDarkMode, currentUserEmail, onEditPlace }: ManagePlacesProps) {
   const [activeTab, setActiveTab] = useState('semua');
   const [places, setPlaces] = useState<PendingPlace[]>([]);
   const [loading, setLoading] = useState(true);
@@ -353,47 +354,45 @@ export function UserManagePlacesScreen({ onBack, isDarkMode, currentUserEmail }:
                         </td>
                         <td className="p-4">
                           <div className="flex items-center justify-center gap-2">
-                            {place.status === 'menunggu' && (
+                            {deleteConfirm === place.id ? (
+                              <div className="flex items-center gap-1">
+                                <button 
+                                  onClick={() => handleDelete(place.id)}
+                                  className="px-2 py-1 rounded-lg text-[10px] font-bold bg-rose-500 text-white hover:bg-rose-600 transition-colors"
+                                >
+                                  Ya, Hapus
+                                </button>
+                                <button 
+                                  onClick={() => setDeleteConfirm(null)}
+                                  className={`px-2 py-1 rounded-lg text-[10px] font-bold border ${isDarkMode ? 'border-[#404040] text-[#A8A29E]' : 'border-[#E7E5E4] text-[#78716C]'}`}
+                                >
+                                  Batal
+                                </button>
+                              </div>
+                            ) : (
                               <>
-                                {deleteConfirm === place.id ? (
-                                  <div className="flex items-center gap-1">
-                                    <button 
-                                      onClick={() => handleDelete(place.id)}
-                                      className="px-2 py-1 rounded-lg text-[10px] font-bold bg-rose-500 text-white hover:bg-rose-600 transition-colors"
-                                    >
-                                      Ya, Hapus
-                                    </button>
-                                    <button 
-                                      onClick={() => setDeleteConfirm(null)}
-                                      className={`px-2 py-1 rounded-lg text-[10px] font-bold border ${isDarkMode ? 'border-[#404040] text-[#A8A29E]' : 'border-[#E7E5E4] text-[#78716C]'}`}
-                                    >
-                                      Batal
-                                    </button>
-                                  </div>
-                                ) : (
+                                {place.status === 'disetujui' && (
+                                  <span className={`text-[10px] font-bold ${isDarkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>
+                                    ✓ Live
+                                  </span>
+                                )}
+                                {onEditPlace && (
                                   <button 
-                                    onClick={() => setDeleteConfirm(place.id)}
-                                    className={`w-8 h-8 rounded-lg border flex items-center justify-center transition-colors ${isDarkMode ? 'border-rose-500/30 text-rose-500 bg-rose-500/10 hover:bg-rose-500/20' : 'border-rose-200 text-rose-500 bg-rose-50 hover:bg-rose-100'}`}
-                                    title="Hapus Pengajuan"
+                                    onClick={() => onEditPlace(place)}
+                                    className={`w-8 h-8 rounded-lg border flex items-center justify-center transition-colors ${isDarkMode ? 'border-[#404040] text-blue-400 bg-blue-500/10 hover:bg-blue-500/20' : 'border-blue-200 text-blue-500 bg-blue-50 hover:bg-blue-100'}`}
+                                    title="Edit Tempat"
                                   >
-                                    <Trash2 className="w-3.5 h-3.5" />
+                                    <Edit2 className="w-4 h-4" />
                                   </button>
                                 )}
+                                <button 
+                                  onClick={() => setDeleteConfirm(place.id)}
+                                  className={`w-8 h-8 rounded-lg border flex items-center justify-center transition-colors ${isDarkMode ? 'border-rose-500/30 text-rose-500 bg-rose-500/10 hover:bg-rose-500/20' : 'border-rose-200 text-rose-500 bg-rose-50 hover:bg-rose-100'}`}
+                                  title="Hapus Tempat"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
                               </>
-                            )}
-                            {place.status === 'ditolak' && (
-                              <button 
-                                onClick={() => setDeleteConfirm(place.id)}
-                                className={`w-8 h-8 rounded-lg border flex items-center justify-center transition-colors ${isDarkMode ? 'border-rose-500/30 text-rose-500 bg-rose-500/10 hover:bg-rose-500/20' : 'border-rose-200 text-rose-500 bg-rose-50 hover:bg-rose-100'}`}
-                                title="Hapus"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            )}
-                            {place.status === 'disetujui' && (
-                              <span className={`text-xs font-bold ${isDarkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>
-                                ✓ Live
-                              </span>
                             )}
                           </div>
                         </td>

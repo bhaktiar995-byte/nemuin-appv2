@@ -1,5 +1,5 @@
 import { useState, FormEvent, useEffect } from 'react';
-import { ChevronLeft, Camera, Send, Store, Plus, Trash2, ImagePlus, MapPin, Locate } from 'lucide-react';
+import { ChevronLeft, Camera, Send, Store, Plus, Trash2, ImagePlus, MapPin, Locate, CheckCircle2 } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
@@ -18,6 +18,7 @@ interface MockFormProps {
   onSuccess: () => void;
   isDarkMode?: boolean;
   currentUser?: { email: string; role: 'user' | 'admin' } | null;
+  editData?: any;
 }
 
 const pickerIcon = L.divIcon({
@@ -82,17 +83,30 @@ function LocateControl({ onLocationFound, isDarkMode }: { onLocationFound: (latl
   );
 }
 
-export function AddFormsScreen({ type, onBack, onSuccess, isDarkMode, currentUser }: MockFormProps) {
+export function AddFormsScreen({ type, onBack, onSuccess, isDarkMode, currentUser, editData }: MockFormProps) {
   const [loading, setLoading] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState('Lalapan');
-  const [customCategory, setCustomCategory] = useState('');
-  const [selectedCoords, setSelectedCoords] = useState<[number, number]>([-7.921323, 112.599587]);
-  const [restoImage, setRestoImage] = useState<string | null>(null);
+  
+  const initialCategory = editData?.type || 'Lalapan';
+  const isStandardCategory = ['Lalapan', 'Ayam', 'Bakso', 'Nasi Goreng', 'Mie'].includes(initialCategory);
+  
+  const [selectedCategory, setSelectedCategory] = useState(isStandardCategory ? initialCategory : 'Lainnya');
+  const [customCategory, setCustomCategory] = useState(!isStandardCategory ? initialCategory : '');
+  const [selectedCoords, setSelectedCoords] = useState<[number, number]>([editData?.lat || -7.921323, editData?.lng || 112.599587]);
+  const [restoImage, setRestoImage] = useState<string | null>(editData?.image || null);
   const [mainImageFile, setMainImageFile] = useState<File | null>(null);
-  const [menuItems, setMenuItems] = useState<MenuItem[]>([
-    { id: crypto.randomUUID(), name: '', price: '', image: null }
-  ]);
+  
+  const initialMenuItems = editData?.menu_items?.length 
+    ? editData.menu_items.map((m: any) => ({
+        id: crypto.randomUUID(),
+        name: m.name || '',
+        price: (m.price || 0).toString(),
+        image: m.image || null
+      }))
+    : [{ id: crypto.randomUUID(), name: '', price: '', image: null }];
+    
+  const [menuItems, setMenuItems] = useState<MenuItem[]>(initialMenuItems);
   const [menuFiles, setMenuFiles] = useState<Record<string, File>>({});
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   // Helper to upload image to Supabase Storage
   const uploadImage = async (file: File) => {
@@ -177,30 +191,39 @@ export function AddFormsScreen({ type, onBack, onSuccess, isDarkMode, currentUse
           };
         }));
 
-        // Insert into pending_places (awaiting admin approval)
         const submitterName = currentUser?.email?.split('@')[0] || 'User';
-        const { error: pendingError } = await supabase
-          .from('pending_places')
-          .insert({
-            name: formData.get('nama_tempat'),
-            type: categories[0],
-            food_categories: categories,
-            address: formData.get('alamat'),
-            lat: selectedCoords[0],
-            lng: selectedCoords[1],
-            price_range: formData.get('rentang_harga'),
-            phone: formData.get('phone'),
-            hours: formData.get('hours'),
-            image: imageUrl,
-            submitter_email: currentUser?.email || 'unknown@email.com',
-            submitter_name: submitterName,
-            status: 'menunggu',
-            menu_items: menuJsonb
-          });
 
-        if (pendingError) throw pendingError;
+        const payload = {
+          name: formData.get('nama_tempat'),
+          type: categories[0],
+          food_categories: categories,
+          address: formData.get('alamat'),
+          lat: selectedCoords[0],
+          lng: selectedCoords[1],
+          price_range: formData.get('rentang_harga'),
+          phone: formData.get('phone'),
+          hours: formData.get('hours'),
+          submitter_email: currentUser?.email || 'unknown@email.com',
+          submitter_name: submitterName,
+          status: 'menunggu',
+          menu_items: menuJsonb,
+          ...(imageUrl ? { image: imageUrl } : {}) // keep old image if no new image uploaded
+        };
 
-        alert('✅ Tempat makan berhasil diajukan! Menunggu persetujuan admin.');
+        if (editData) {
+          const { error: pendingError } = await supabase
+            .from('pending_places')
+            .update(payload)
+            .eq('id', editData.id);
+          if (pendingError) throw pendingError;
+        } else {
+          const { error: pendingError } = await supabase
+            .from('pending_places')
+            .insert(payload);
+          if (pendingError) throw pendingError;
+        }
+
+        setShowSuccessModal(true);
       } else {
         // Extract display name from email or use default
         const authorName = currentUser?.email?.split('@')[0] || 'Community User';
@@ -217,9 +240,9 @@ export function AddFormsScreen({ type, onBack, onSuccess, isDarkMode, currentUse
           location: formData.get('tagged_resto') || ''
         });
         if (postError) throw postError;
+        
+        onSuccess();
       }
-
-      onSuccess();
     } catch (err) {
       console.error("Supabase Error detail:", err);
       alert("Gagal menyimpan data ke Supabase. Pastikan tabel dan bucket 'images' sudah dibuat dan memiliki izin RLS yang benar.");
@@ -237,7 +260,7 @@ export function AddFormsScreen({ type, onBack, onSuccess, isDarkMode, currentUse
           <ChevronLeft className="w-6 h-6" />
         </button>
         <h1 className={`text-lg font-bold italic transition-colors ${isDarkMode ? 'text-white' : 'text-[#4B2E2A]'}`}>
-          {isResto ? 'Tambah Tempat Makan' : 'Post Tempat Makan'}
+          {isResto ? (editData ? 'Edit Tempat Makan' : 'Tambah Tempat Makan') : 'Post Tempat Makan'}
         </h1>
         <div className="w-10" />
       </div>
@@ -284,7 +307,7 @@ export function AddFormsScreen({ type, onBack, onSuccess, isDarkMode, currentUse
             <>
               <div className="flex flex-col gap-2">
                 <label className={`text-xs font-bold uppercase tracking-widest pl-1 ${isDarkMode ? 'text-[#A8A29E]' : 'text-[#78716C]'}`}>Nama Tempat</label>
-                <input name="nama_tempat" required type="text" placeholder="Cth: Ayam Bakar Pak Kumis" className={`w-full h-12 rounded-xl px-4 text-sm font-medium border focus:outline-none focus:border-[#FF611D] transition-colors ${isDarkMode ? 'bg-[#333333] border-[#404040] text-white' : 'bg-white border-[#E7E5E4] text-[#4B2E2A]'}`} />
+                <input name="nama_tempat" required defaultValue={editData?.name || ''} type="text" placeholder="Cth: Ayam Bakar Pak Kumis" className={`w-full h-12 rounded-xl px-4 text-sm font-medium border focus:outline-none focus:border-[#FF611D] transition-colors ${isDarkMode ? 'bg-[#333333] border-[#404040] text-white' : 'bg-white border-[#E7E5E4] text-[#4B2E2A]'}`} />
               </div>
               <div className="flex flex-col gap-2">
                 <label className={`text-xs font-bold uppercase tracking-widest pl-1 ${isDarkMode ? 'text-[#A8A29E]' : 'text-[#78716C]'}`}>Kategori (Pilih salah satu)</label>
@@ -318,7 +341,7 @@ export function AddFormsScreen({ type, onBack, onSuccess, isDarkMode, currentUse
               )}
               <div className="flex flex-col gap-2">
                 <label className={`text-xs font-bold uppercase tracking-widest pl-1 ${isDarkMode ? 'text-[#A8A29E]' : 'text-[#78716C]'}`}>Alamat Lengkap</label>
-                <input name="alamat" required type="text" placeholder="Detail lokasi / patokan" className={`w-full h-12 rounded-xl px-4 text-sm font-medium border focus:outline-none focus:border-[#FF611D] transition-colors ${isDarkMode ? 'bg-[#333333] border-[#404040] text-white' : 'bg-white border-[#E7E5E4] text-[#4B2E2A]'}`} />
+                <input name="alamat" required defaultValue={editData?.address || ''} type="text" placeholder="Detail lokasi / patokan" className={`w-full h-12 rounded-xl px-4 text-sm font-medium border focus:outline-none focus:border-[#FF611D] transition-colors ${isDarkMode ? 'bg-[#333333] border-[#404040] text-white' : 'bg-white border-[#E7E5E4] text-[#4B2E2A]'}`} />
               </div>
               <div className="flex flex-col gap-2">
                 <label className={`text-xs font-bold uppercase tracking-widest pl-1 flex items-center gap-1 ${isDarkMode ? 'text-[#A8A29E]' : 'text-[#78716C]'}`}>
@@ -353,15 +376,15 @@ export function AddFormsScreen({ type, onBack, onSuccess, isDarkMode, currentUse
               </div>
               <div className="flex flex-col gap-2">
                 <label className={`text-xs font-bold uppercase tracking-widest pl-1 ${isDarkMode ? 'text-[#A8A29E]' : 'text-[#78716C]'}`}>Rentang Harga (Cth: Rp. 20rb - 50rb)</label>
-                <input name="rentang_harga" required type="text" placeholder="Cth: 15.000 - 30.000" className={`w-full h-12 rounded-xl px-4 text-sm font-medium border focus:outline-none focus:border-[#FF611D] transition-colors ${isDarkMode ? 'bg-[#333333] border-[#404040] text-white' : 'bg-white border-[#E7E5E4] text-[#4B2E2A]'}`} />
+                <input name="rentang_harga" required defaultValue={editData?.price_range || ''} type="text" placeholder="Cth: 15.000 - 30.000" className={`w-full h-12 rounded-xl px-4 text-sm font-medium border focus:outline-none focus:border-[#FF611D] transition-colors ${isDarkMode ? 'bg-[#333333] border-[#404040] text-white' : 'bg-white border-[#E7E5E4] text-[#4B2E2A]'}`} />
               </div>
               <div className="flex flex-col gap-2">
                 <label className={`text-xs font-bold uppercase tracking-widest pl-1 ${isDarkMode ? 'text-[#A8A29E]' : 'text-[#78716C]'}`}>Nomor Telepon (WhatsApp diutamakan)</label>
-                <input name="phone" required type="tel" placeholder="Cth: 08123456789" className={`w-full h-12 rounded-xl px-4 text-sm font-medium border focus:outline-none focus:border-[#FF611D] transition-colors ${isDarkMode ? 'bg-[#333333] border-[#404040] text-white' : 'bg-white border-[#E7E5E4] text-[#4B2E2A]'}`} />
+                <input name="phone" required defaultValue={editData?.phone || ''} type="tel" placeholder="Cth: 08123456789" className={`w-full h-12 rounded-xl px-4 text-sm font-medium border focus:outline-none focus:border-[#FF611D] transition-colors ${isDarkMode ? 'bg-[#333333] border-[#404040] text-white' : 'bg-white border-[#E7E5E4] text-[#4B2E2A]'}`} />
               </div>
               <div className="flex flex-col gap-2">
                 <label className={`text-xs font-bold uppercase tracking-widest pl-1 ${isDarkMode ? 'text-[#A8A29E]' : 'text-[#78716C]'}`}>Jam Operasional</label>
-                <input name="hours" required type="text" placeholder="Cth: 08:00 - 21:00" className={`w-full h-12 rounded-xl px-4 text-sm font-medium border focus:outline-none focus:border-[#FF611D] transition-colors ${isDarkMode ? 'bg-[#333333] border-[#404040] text-white' : 'bg-white border-[#E7E5E4] text-[#4B2E2A]'}`} />
+                <input name="hours" required defaultValue={editData?.hours || ''} type="text" placeholder="Cth: 08:00 - 21:00" className={`w-full h-12 rounded-xl px-4 text-sm font-medium border focus:outline-none focus:border-[#FF611D] transition-colors ${isDarkMode ? 'bg-[#333333] border-[#404040] text-white' : 'bg-white border-[#E7E5E4] text-[#4B2E2A]'}`} />
               </div>
 
               {/* Dynamic Menu Items */}
@@ -480,6 +503,31 @@ export function AddFormsScreen({ type, onBack, onSuccess, isDarkMode, currentUse
           )}
         </button>
       </form>
+
+      {/* Success Modal Overlay */}
+      {showSuccessModal && (
+        <div className="fixed inset-0 z-[2000] flex items-center justify-center p-4 animate-in fade-in duration-300">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div className={`relative w-full max-w-sm rounded-3xl p-8 flex flex-col items-center text-center shadow-2xl animate-in zoom-in-95 duration-300 ${isDarkMode ? 'bg-[#262626] border border-[#404040]' : 'bg-white border border-[#E7E5E4]'}`}>
+            <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mb-6">
+              <CheckCircle2 className="w-10 h-10 text-green-500" />
+            </div>
+            <h2 className={`text-2xl font-black italic tracking-tighter mb-2 ${isDarkMode ? 'text-white' : 'text-[#4B2E2A]'}`}>Berhasil!</h2>
+            <p className={`text-sm mb-8 ${isDarkMode ? 'text-[#A8A29E]' : 'text-[#78716C]'}`}>
+              Tempat makan berhasil diajukan. Kami akan meninjaunya terlebih dahulu sebelum dipublikasikan.
+            </p>
+            <button
+              onClick={() => {
+                setShowSuccessModal(false);
+                onSuccess();
+              }}
+              className="w-full h-12 bg-[#FF611D] text-white rounded-xl font-bold hover:opacity-90 transition-opacity"
+            >
+              Oke, Mengerti
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

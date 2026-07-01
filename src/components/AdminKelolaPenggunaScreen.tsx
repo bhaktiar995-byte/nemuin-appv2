@@ -1,291 +1,227 @@
-import React from 'react';
-import { Search, Filter, Edit, Trash2, MoreVertical, ChevronLeft, ChevronRight, ChevronDown, Plus } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Search, User as UserIcon, Save, CheckCircle } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
 
 interface AdminKelolaPenggunaScreenProps {
   isDarkMode: boolean;
 }
 
-const mockRecentUsers = [
-  { id: 1, name: 'Rina Amelia', email: 'rina.amelia@gmail.com', role: 'User', roleColor: 'text-green-600 bg-green-50 dark:bg-green-500/10', date: '23/06/2025 14:20', status: 'Aktif', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Rina' },
-  { id: 2, name: 'Dimas Saputra', email: 'dimas.saputra@gmail.com', role: 'User', roleColor: 'text-green-600 bg-green-50 dark:bg-green-500/10', date: '23/06/2025 13:45', status: 'Aktif', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Dimas' },
-  { id: 3, name: 'Budi Santoso', email: 'budi.santoso@gmail.com', role: 'User', roleColor: 'text-green-600 bg-green-50 dark:bg-green-500/10', date: '22/06/2025 16:10', status: 'Aktif', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Budi' },
-  { id: 4, name: 'Siti Nurhaliza', email: 'siti.nurhaliza@gmail.com', role: 'User', roleColor: 'text-green-600 bg-green-50 dark:bg-green-500/10', date: '22/06/2025 11:25', status: 'Aktif', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Siti' },
-  { id: 5, name: 'Andi Wijaya', email: 'andi.wijaya@gmail.com', role: 'User', roleColor: 'text-green-600 bg-green-50 dark:bg-green-500/10', date: '21/06/2025 09:50', status: 'Aktif', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Andi' },
-];
-
-const mockActiveUsers = [
-  { id: 1, name: 'Aditya Yusuf', email: 'aditya.yusuf@gmail.com', role: 'Admin', roleColor: 'text-orange-500 bg-orange-50 dark:bg-orange-500/10', status: 'Aktif', lastActive: 'Online', isOnline: true, joined: '10/01/2025', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Aditya' },
-  { id: 2, name: 'Rina Amelia', email: 'rina.amelia@gmail.com', role: 'User', roleColor: 'text-green-600 bg-green-50 dark:bg-green-500/10', status: 'Aktif', lastActive: '10 menit lalu', isOnline: false, joined: '23/06/2025', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Rina' },
-  { id: 3, name: 'Dimas Saputra', email: 'dimas.saputra@gmail.com', role: 'User', roleColor: 'text-green-600 bg-green-50 dark:bg-green-500/10', status: 'Aktif', lastActive: '1 jam lalu', isOnline: false, joined: '22/06/2025', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Dimas' },
-  { id: 4, name: 'Budi Santoso', email: 'budi.santoso@gmail.com', role: 'User', roleColor: 'text-green-600 bg-green-50 dark:bg-green-500/10', status: 'Aktif', lastActive: '2 jam lalu', isOnline: false, joined: '22/06/2025', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Budi' },
-  { id: 5, name: 'Siti Nurhaliza', email: 'siti.nurhaliza@gmail.com', role: 'User', roleColor: 'text-green-600 bg-green-50 dark:bg-green-500/10', status: 'Aktif', lastActive: '3 jam lalu', isOnline: false, joined: '22/06/2025', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Siti' },
-];
-
-const mockSystemRoles = [
-  { 
-    id: 1, 
-    role: 'Super Admin', 
-    roleColor: 'text-orange-500 bg-orange-50 dark:bg-orange-500/10',
-    desc: 'Akses penuh ke semua fitur sistem', 
-    count: 1,
-    access: ['Semua akses', 'Pengaturan sistem', 'Kelola pengguna & role']
-  },
-  { 
-    id: 2, 
-    role: 'Admin', 
-    roleColor: 'text-blue-500 bg-blue-50 dark:bg-blue-500/10',
-    desc: 'Mengelola data, user, dan pengaturan sistem', 
-    count: 3,
-    access: ['Kelola tempat makan', 'Kelola pengguna', 'Laporan & statistik']
-  },
-  { 
-    id: 3, 
-    role: 'Moderator', 
-    roleColor: 'text-purple-500 bg-purple-50 dark:bg-purple-500/10',
-    desc: 'Menyetujui tempat makan & kelola konten', 
-    count: 2,
-    access: ['Approval tempat makan', 'Kelola konten']
-  },
-  { 
-    id: 4, 
-    role: 'User', 
-    roleColor: 'text-green-600 bg-green-50 dark:bg-green-500/10',
-    desc: 'Pengguna biasa yang dapat menambah tempat', 
-    count: 1244,
-    access: ['Tambah tempat makan', 'Like & komentar', 'Profil pribadi']
-  },
-];
-
 export function AdminKelolaPenggunaScreen({ isDarkMode }: AdminKelolaPenggunaScreenProps) {
+  const [users, setUsers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  
+  // Track role changes before saving
+  const [pendingRoleChanges, setPendingRoleChanges] = useState<Record<string, string>>({});
+  const [savingId, setSavingId] = useState<string | null>(null);
+  const [successId, setSuccessId] = useState<string | null>(null);
+
   const bgColor = isDarkMode ? 'bg-[#1C1917]' : 'bg-[#FAF9F6]';
   const surfaceColor = isDarkMode ? 'bg-[#262626]' : 'bg-white';
   const borderColor = isDarkMode ? 'border-[#404040]' : 'border-[#E7E5E4]';
   const textColor = isDarkMode ? 'text-[#FAF9F6]' : 'text-[#4B2E2A]';
   const mutedColor = isDarkMode ? 'text-[#A8A29E]' : 'text-[#78716C]';
 
+  const fetchUsers = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('users_auth')
+        .select('*')
+        .order('created_at', { ascending: false });
+        
+      if (!error && data) {
+        setUsers(data);
+      } else {
+        console.error('Error fetching users:', error);
+      }
+    } catch (err) {
+      console.error('Error fetching users:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchUsers();
+  }, []);
+
+  const handleSelectChange = (userId: string, newRole: string) => {
+    // If selecting the same role as current, remove from pending
+    const currentUser = users.find(u => u.id === userId);
+    if (currentUser && currentUser.role === newRole) {
+      setPendingRoleChanges(prev => {
+        const next = { ...prev };
+        delete next[userId];
+        return next;
+      });
+    } else {
+      setPendingRoleChanges(prev => ({
+        ...prev,
+        [userId]: newRole
+      }));
+    }
+  };
+
+  const handleSaveRole = async (userId: string) => {
+    const newRole = pendingRoleChanges[userId];
+    if (!newRole) return;
+    
+    setSavingId(userId);
+    setSuccessId(null);
+
+    try {
+      // Use upsert-like approach: update the role column
+      const { data, error } = await supabase
+        .from('users_auth')
+        .update({ role: newRole })
+        .eq('id', userId)
+        .select();
+        
+      if (error) {
+        console.error('Error updating role:', error);
+        alert(`Gagal mengubah role: ${error.message}`);
+      } else if (data && data.length === 0) {
+        console.error('Update ignored by RLS policy');
+        alert('Gagal mengubah role di database. Akses ditolak oleh pengaturan keamanan (RLS) Supabase. Pastikan kebijakan Update RLS pada tabel users_auth diizinkan.');
+      } else {
+        // Re-fetch to ensure we have the latest data from DB
+        await fetchUsers();
+        setPendingRoleChanges(prev => {
+          const next = { ...prev };
+          delete next[userId];
+          return next;
+        });
+        setSuccessId(userId);
+        setTimeout(() => setSuccessId(null), 2000);
+      }
+    } catch (err: any) {
+      console.error('Error updating role:', err);
+      alert(`Gagal mengubah role: ${err.message || 'Unknown error'}`);
+    } finally {
+      setSavingId(null);
+    }
+  };
+
+  const filteredUsers = users.filter(user => 
+    user.email?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   return (
     <div className={`flex-1 flex flex-col h-full overflow-y-auto overflow-x-hidden ${bgColor}`}>
       {/* Header Area */}
-      <div className="p-8 pb-4 flex justify-between items-start shrink-0">
+      <div className="p-4 md:p-8 pb-4 flex flex-col md:flex-row justify-between items-start md:items-center shrink-0 gap-4">
         <div>
-          <h2 className={`text-2xl font-black italic tracking-tight ${textColor} mb-1`}>Kelola Pengguna</h2>
-          <p className={`text-sm ${mutedColor}`}>Kelola semua pengguna aplikasi Nemuin.</p>
+          <h2 className={`text-xl md:text-2xl font-black italic tracking-tight ${textColor} mb-1`}>Kelola Pengguna</h2>
+          <p className={`text-xs md:text-sm ${mutedColor}`}>Kelola semua pengguna aplikasi Nemuin.</p>
         </div>
-        <div className="flex items-center gap-3">
-          <button className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border ${borderColor} ${surfaceColor} text-sm font-semibold ${mutedColor} hover:${isDarkMode ? 'bg-zinc-800' : 'bg-gray-50'} transition-colors`}>
-            <Filter className="w-4 h-4" />
-            Semua Role
-            <ChevronDown className="w-4 h-4 ml-2" />
-          </button>
-          <div className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border ${borderColor} ${surfaceColor} w-72`}>
+        <div className="flex items-center gap-3 w-full md:w-auto">
+          <div className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border ${borderColor} ${surfaceColor} w-full md:w-72`}>
             <Search className={`w-4 h-4 ${mutedColor}`} />
             <input 
               type="text" 
-              placeholder="Cari nama atau email pengguna..." 
+              placeholder="Cari email pengguna..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
               className={`bg-transparent border-none outline-none text-sm w-full ${textColor} placeholder:${mutedColor}`}
             />
           </div>
         </div>
       </div>
 
-      <div className="px-8 pb-8 space-y-6">
+      <div className="px-4 md:px-8 pb-8 space-y-6">
         
-        {/* User Terbaru */}
+        {/* Daftar Pengguna */}
         <div className={`${surfaceColor} rounded-2xl border ${borderColor} flex flex-col shadow-sm overflow-hidden`}>
-          <div className="flex justify-between items-center p-6 border-b border-transparent">
-            <h3 className={`text-lg font-bold italic tracking-tight ${textColor}`}>User Terbaru</h3>
+          <div className="flex justify-between items-center p-4 md:p-6 border-b border-transparent">
+            <h3 className={`text-base md:text-lg font-bold italic tracking-tight ${textColor}`}>Daftar Pengguna ({users.length})</h3>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm whitespace-nowrap">
+            <table className="w-full text-left text-sm whitespace-nowrap min-w-[600px]">
               <thead className={`${isDarkMode ? 'bg-[#262626]' : 'bg-[#FDFCFB]'}`}>
-                <tr className={`border-b ${borderColor} ${textColor} text-xs font-bold`}>
-                  <th className="px-6 py-4">Nama</th>
-                  <th className="px-6 py-4">Email</th>
-                  <th className="px-6 py-4">Role</th>
-                  <th className="px-6 py-4">Tanggal Daftar</th>
-                  <th className="px-6 py-4">Status</th>
-                  <th className="px-6 py-4 text-center">Aksi</th>
+                <tr className={`border-b ${borderColor} ${textColor} text-[10px] md:text-xs font-bold uppercase tracking-wider`}>
+                  <th className="px-4 md:px-6 py-3 md:py-4">Pengguna</th>
+                  <th className="px-4 md:px-6 py-3 md:py-4">Role Saat Ini</th>
+                  <th className="px-4 md:px-6 py-3 md:py-4">Tanggal Daftar</th>
+                  <th className="px-4 md:px-6 py-3 md:py-4 text-center">Atur Role</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-[#404040]">
-                {mockRecentUsers.map((user) => (
-                  <tr key={user.id} className={`hover:${isDarkMode ? 'bg-zinc-800/50' : 'bg-gray-50/50'} transition-colors`}>
-                    <td className="px-6 py-3">
-                      <div className="flex items-center gap-3">
-                        <img src={user.avatar} alt={user.name} className="w-8 h-8 rounded-full bg-gray-100 shrink-0" />
-                        <span className={`font-bold text-xs ${textColor}`}>{user.name}</span>
-                      </div>
-                    </td>
-                    <td className={`px-6 py-3 text-xs ${mutedColor}`}>{user.email}</td>
-                    <td className="px-6 py-3">
-                      <span className={`px-3 py-1 rounded-full text-[10px] font-bold ${user.roleColor}`}>
-                        {user.role}
-                      </span>
-                    </td>
-                    <td className={`px-6 py-3 text-xs ${mutedColor}`}>{user.date}</td>
-                    <td className="px-6 py-3">
-                      <span className="text-green-500 text-xs font-bold bg-green-50 dark:bg-green-500/10 px-3 py-1 rounded-full">
-                        {user.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-3 text-center">
-                      <button className={`p-1.5 rounded-lg border-none ${mutedColor} hover:${textColor} transition-colors`}>
-                        <MoreVertical className="w-4 h-4 mx-auto" />
-                      </button>
-                    </td>
+                {loading ? (
+                  <tr>
+                    <td colSpan={4} className="px-6 py-12 text-center text-sm text-gray-500">Memuat data pengguna...</td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+                ) : filteredUsers.length > 0 ? (
+                  filteredUsers.map((user) => {
+                    const currentSelectedRole = pendingRoleChanges[user.id] ?? user.role ?? 'user';
+                    const isChanged = user.id in pendingRoleChanges && pendingRoleChanges[user.id] !== user.role;
+                    const isSaving = savingId === user.id;
+                    const isSuccess = successId === user.id;
 
-        {/* Pengguna Aktif */}
-        <div className={`${surfaceColor} rounded-2xl border ${borderColor} flex flex-col shadow-sm overflow-hidden`}>
-          <div className="flex justify-between items-center p-6 border-b border-transparent">
-            <h3 className={`text-lg font-bold italic tracking-tight ${textColor}`}>Pengguna Aktif</h3>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm whitespace-nowrap">
-              <thead className={`${isDarkMode ? 'bg-[#262626]' : 'bg-[#FDFCFB]'}`}>
-                <tr className={`border-b ${borderColor} ${textColor} text-xs font-bold`}>
-                  <th className="px-6 py-4">Nama</th>
-                  <th className="px-6 py-4">Email</th>
-                  <th className="px-6 py-4">Role</th>
-                  <th className="px-6 py-4">Status</th>
-                  <th className="px-6 py-4">Terakhir Aktif</th>
-                  <th className="px-6 py-4">Bergabung</th>
-                  <th className="px-6 py-4 text-center">Aksi</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100 dark:divide-[#404040]">
-                {mockActiveUsers.map((user) => (
-                  <tr key={user.id} className={`hover:${isDarkMode ? 'bg-zinc-800/50' : 'bg-gray-50/50'} transition-colors`}>
-                    <td className="px-6 py-3">
-                      <div className="flex items-center gap-3">
-                        <img src={user.avatar} alt={user.name} className="w-8 h-8 rounded-full bg-gray-100 shrink-0" />
-                        <span className={`font-bold text-xs ${textColor}`}>{user.name}</span>
-                      </div>
-                    </td>
-                    <td className={`px-6 py-3 text-xs ${mutedColor}`}>{user.email}</td>
-                    <td className="px-6 py-3">
-                      <span className={`px-3 py-1 rounded-full text-[10px] font-bold ${user.roleColor}`}>
-                        {user.role}
-                      </span>
-                    </td>
-                    <td className="px-6 py-3">
-                      <span className="text-green-500 text-xs font-bold bg-green-50 dark:bg-green-500/10 px-3 py-1 rounded-full">
-                        {user.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-3">
-                      <div className="flex items-center gap-1.5">
-                        <div className={`w-1.5 h-1.5 rounded-full ${user.isOnline ? 'bg-green-500' : 'bg-gray-400'}`}></div>
-                        <span className={`text-xs ${user.isOnline ? 'text-green-500 font-semibold' : mutedColor}`}>
-                          {user.lastActive}
-                        </span>
-                      </div>
-                    </td>
-                    <td className={`px-6 py-3 text-xs ${mutedColor}`}>{user.joined}</td>
-                    <td className="px-6 py-3">
-                      <div className="flex items-center justify-center gap-2">
-                        <button className="p-1.5 text-orange-500 bg-orange-50 dark:bg-orange-500/10 hover:bg-orange-100 dark:hover:bg-orange-500/20 rounded-md transition-colors shadow-sm"><Edit className="w-3.5 h-3.5" /></button>
-                        <button className="p-1.5 text-red-500 bg-red-50 dark:bg-red-500/10 hover:bg-red-100 dark:hover:bg-red-500/20 rounded-md transition-colors shadow-sm"><Trash2 className="w-3.5 h-3.5" /></button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {/* Pagination */}
-          <div className={`p-4 border-t ${borderColor} flex justify-end ${isDarkMode ? 'bg-[#262626]' : 'bg-[#FDFCFB]'}`}>
-            <div className="flex items-center gap-1">
-              <button className={`p-1.5 rounded-lg border ${borderColor} ${mutedColor} hover:${textColor} hover:${isDarkMode ? 'bg-zinc-800' : 'bg-gray-50'} transition-colors ${isDarkMode ? 'bg-transparent' : 'bg-white'}`}>
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              <button className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold bg-[#FF611D] text-white shadow-sm`}>
-                1
-              </button>
-              <button className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold border ${borderColor} ${mutedColor} hover:${textColor} hover:${isDarkMode ? 'bg-zinc-800' : 'bg-gray-50'} transition-colors ${isDarkMode ? 'bg-transparent' : 'bg-white'}`}>
-                2
-              </button>
-              <button className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold border ${borderColor} ${mutedColor} hover:${textColor} hover:${isDarkMode ? 'bg-zinc-800' : 'bg-gray-50'} transition-colors ${isDarkMode ? 'bg-transparent' : 'bg-white'}`}>
-                3
-              </button>
-              <button className={`p-1.5 rounded-lg border ${borderColor} ${mutedColor} hover:${textColor} hover:${isDarkMode ? 'bg-zinc-800' : 'bg-gray-50'} transition-colors ${isDarkMode ? 'bg-transparent' : 'bg-white'}`}>
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        </div>
+                    return (
+                      <tr key={user.id} className={`hover:${isDarkMode ? 'bg-zinc-800/50' : 'bg-gray-50/50'} transition-colors`}>
+                        <td className="px-4 md:px-6 py-3">
+                          <div className="flex items-center gap-3">
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${isDarkMode ? 'bg-[#333333]' : 'bg-gray-100'}`}>
+                              <UserIcon className={`w-4 h-4 ${mutedColor}`} />
+                            </div>
+                            <span className={`font-bold text-xs md:text-sm ${textColor}`}>{user.email}</span>
+                          </div>
+                        </td>
+                        <td className="px-4 md:px-6 py-3">
+                          <span className={`px-3 py-1 rounded-full text-[10px] font-bold ${
+                            user.role === 'admin' 
+                              ? 'text-orange-500 bg-orange-50 dark:bg-orange-500/10' 
+                              : 'text-green-600 bg-green-50 dark:bg-green-500/10'
+                          }`}>
+                            {user.role === 'admin' ? 'Admin' : 'User'}
+                          </span>
+                        </td>
+                        <td className={`px-4 md:px-6 py-3 text-[10px] md:text-xs ${mutedColor}`}>
+                          {user.created_at ? new Date(user.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : '-'}
+                        </td>
+                        <td className="px-4 md:px-6 py-3 text-center">
+                          <div className="flex items-center justify-center gap-2">
+                            <select
+                              value={currentSelectedRole}
+                              onChange={(e) => handleSelectChange(user.id, e.target.value)}
+                              disabled={isSaving}
+                              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border ${
+                                isChanged ? 'border-[#FF611D]' : borderColor
+                              } bg-transparent ${textColor} outline-none cursor-pointer transition-colors disabled:opacity-50`}
+                            >
+                              <option value="user" className="text-black">User</option>
+                              <option value="admin" className="text-black">Admin</option>
+                            </select>
+                            
+                            {isChanged && (
+                              <button
+                                onClick={() => handleSaveRole(user.id)}
+                                disabled={isSaving}
+                                className="flex items-center gap-1 bg-[#FF611D] hover:bg-orange-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-colors disabled:opacity-50 shadow-sm"
+                              >
+                                <Save className="w-3.5 h-3.5" />
+                                {isSaving ? 'Menyimpan...' : 'Simpan'}
+                              </button>
+                            )}
 
-        {/* Role Sistem */}
-        <div className={`${surfaceColor} rounded-2xl border ${borderColor} flex flex-col shadow-sm overflow-hidden`}>
-          <div className="flex justify-between items-center p-6 border-b border-transparent">
-            <h3 className={`text-lg font-bold italic tracking-tight ${textColor}`}>Role Sistem</h3>
-            <button className="bg-[#FF611D] text-white text-xs font-bold px-4 py-2 rounded-lg flex items-center gap-1 shadow-md hover:bg-orange-600 transition-colors">
-              <Plus className="w-4 h-4" /> Tambah Role
-            </button>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm whitespace-nowrap">
-              <thead className={`${isDarkMode ? 'bg-[#262626]' : 'bg-[#FDFCFB]'}`}>
-                <tr className={`border-b ${borderColor} ${textColor} text-xs font-bold`}>
-                  <th className="px-6 py-4">Role</th>
-                  <th className="px-6 py-4">Deskripsi</th>
-                  <th className="px-6 py-4">Jumlah Pengguna</th>
-                  <th className="px-6 py-4">Akses Utama</th>
-                  <th className="px-6 py-4 text-center">Aksi</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100 dark:divide-[#404040]">
-                {mockSystemRoles.map((role) => (
-                  <tr key={role.id} className={`hover:${isDarkMode ? 'bg-zinc-800/50' : 'bg-gray-50/50'} transition-colors`}>
-                    <td className="px-6 py-4">
-                      <span className={`px-3 py-1 rounded-full text-[10px] font-bold ${role.roleColor}`}>
-                        {role.role}
-                      </span>
-                    </td>
-                    <td className={`px-6 py-4 text-xs ${mutedColor}`}>{role.desc}</td>
-                    <td className={`px-6 py-4 text-xs ${textColor} font-semibold`}>{role.count.toLocaleString()}</td>
-                    <td className="px-6 py-4">
-                      <ul className="space-y-1">
-                        {role.access.map((item, idx) => (
-                          <li key={idx} className={`text-[11px] ${mutedColor} flex items-center gap-1.5`}>
-                            <div className="w-1.5 h-1.5 rounded-full bg-[#FF611D]"></div>
-                            {item}
-                          </li>
-                        ))}
-                      </ul>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center justify-center gap-2">
-                        <button className="p-1.5 text-orange-500 bg-orange-50 dark:bg-orange-500/10 hover:bg-orange-100 dark:hover:bg-orange-500/20 rounded-md transition-colors shadow-sm"><Edit className="w-3.5 h-3.5" /></button>
-                        <button className="p-1.5 text-red-500 bg-red-50 dark:bg-red-500/10 hover:bg-red-100 dark:hover:bg-red-500/20 rounded-md transition-colors shadow-sm"><Trash2 className="w-3.5 h-3.5" /></button>
-                      </div>
-                    </td>
+                            {isSuccess && (
+                              <span className="flex items-center gap-1 text-green-500 text-xs font-bold">
+                                <CheckCircle className="w-3.5 h-3.5" /> Tersimpan!
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                ) : (
+                  <tr>
+                    <td colSpan={4} className="px-6 py-12 text-center text-sm text-gray-500">Tidak ada pengguna ditemukan.</td>
                   </tr>
-                ))}
+                )}
               </tbody>
             </table>
-          </div>
-          {/* Pagination */}
-          <div className={`p-4 border-t ${borderColor} flex justify-end ${isDarkMode ? 'bg-[#262626]' : 'bg-[#FDFCFB]'}`}>
-            <div className="flex items-center gap-1">
-              <button className={`p-1.5 rounded-lg border ${borderColor} ${mutedColor} hover:${textColor} hover:${isDarkMode ? 'bg-zinc-800' : 'bg-gray-50'} transition-colors ${isDarkMode ? 'bg-transparent' : 'bg-white'}`}>
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              <button className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold bg-[#FF611D] text-white shadow-sm`}>
-                1
-              </button>
-              <button className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold border ${borderColor} ${mutedColor} hover:${textColor} hover:${isDarkMode ? 'bg-zinc-800' : 'bg-gray-50'} transition-colors ${isDarkMode ? 'bg-transparent' : 'bg-white'}`}>
-                2
-              </button>
-              <button className={`p-1.5 rounded-lg border ${borderColor} ${mutedColor} hover:${textColor} hover:${isDarkMode ? 'bg-zinc-800' : 'bg-gray-50'} transition-colors ${isDarkMode ? 'bg-transparent' : 'bg-white'}`}>
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
           </div>
         </div>
 
