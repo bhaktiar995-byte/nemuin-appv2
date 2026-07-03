@@ -571,7 +571,7 @@ export default function App() {
 
       <div className="flex-1 flex flex-row overflow-hidden relative">
         {/* Sidebar Navigation - Full Height (Desktop) */}
-        {!['spin', 'create_resto', 'create_post', 'create_menu', 'profile', 'settings', 'detail', 'chat', 'order', 'admin', 'manage_places'].includes(view) && (
+        {!['spin', 'create_resto', 'create_post', 'create_menu', 'profile', 'settings', 'detail', 'chat', 'order', 'admin', 'manage_places', 'edit_resto'].includes(view) && !isCommentOpen && (
           <div 
             className={`hidden md:flex flex-col h-full transition-all duration-500 z-[115] border-r w-20 hover:w-64 group/sidebar ${
               isDarkMode ? 'bg-[#262626] border-[#404040]' : 'bg-[#F6F1EA] border-[#E7E5E4]'
@@ -934,7 +934,7 @@ export default function App() {
           )}
 
           {/* Mobile Bottom Navigation (Fixed) */}
-          {view !== 'detail' && view !== 'chat' && view !== 'order' && view !== 'create_resto' && view !== 'create_post' && view !== 'create_menu' && view !== 'spin' && view !== 'admin' && (
+          {view !== 'detail' && view !== 'chat' && view !== 'order' && view !== 'create_resto' && view !== 'create_post' && view !== 'create_menu' && view !== 'spin' && view !== 'admin' && !isCommentOpen && (
             <div className={`md:hidden fixed bottom-0 left-0 right-0 z-[9999] flex justify-around items-center h-20 px-2 pb-safe shadow-[0_-8px_30px_rgba(0,0,0,0.1)] border-t backdrop-blur-xl transition-all duration-300 ${
               isDarkMode ? 'bg-[#262626]/90 border-[#404040]' : 'bg-white/90 border-[#E7E5E4]'
             }`}>
