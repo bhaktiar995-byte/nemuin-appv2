@@ -107,10 +107,10 @@ export function FeedScreen({ posts, isDarkMode, onSeed, isSeeding, onCommentStat
         if (error) {
           console.warn('post_likes table not available, using session-only likes:', error.message);
           setLikesTableExists(false);
-        } else if (data && data.length > 0) {
-          // Merge DB likes with local storage likes to prevent data loss if DB insert failed previously
+        } else if (data && data.length >= 0) {
+          // Sync DB likes with local state (even if 0, it clears old local storage)
           setLikedPostIds(prev => {
-            const merged = new Set(prev);
+            const merged = new Set<string>();
             data.forEach((like: any) => merged.add(like.post_id));
             localStorage.setItem(getLikesKey(), JSON.stringify(Array.from(merged)));
             return merged;
@@ -239,7 +239,7 @@ export function FeedScreen({ posts, isDarkMode, onSeed, isSeeding, onCommentStat
       id: crypto.randomUUID(),
       user: authorName,
       text: savedText,
-      time: 'Baru saja'
+      time: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
     };
 
     // Optimistically update UI immediately

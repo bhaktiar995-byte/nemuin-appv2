@@ -146,7 +146,9 @@ export default function App() {
         image: p.image || '',
         likes: p.likes || 0,
         comments: p.comments || 0,
-        timeAgo: p.date || 'Baru Saja',
+        timeAgo: p.created_at 
+          ? new Date(p.created_at).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) 
+          : (p.date || 'Baru Saja'),
         location: p.location
       }));
 
