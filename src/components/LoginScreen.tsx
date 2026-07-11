@@ -1,14 +1,16 @@
 import React, { useState } from 'react';
-import { Shield, User as UserIcon, Lock, Eye, EyeOff, UtensilsCrossed, AlertCircle, ArrowRight, CheckCircle, UserPlus, LogIn, Check } from 'lucide-react';
+import { Shield, User as UserIcon, Lock, Eye, EyeOff, UtensilsCrossed, AlertCircle, ArrowRight, ArrowLeft, CheckCircle, UserPlus, LogIn, Check } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
 interface LoginScreenProps {
   onLogin: (role: 'user' | 'admin', email: string) => void;
+  onBack?: () => void;
   isDarkMode?: boolean;
+  initialMode?: 'login' | 'register';
 }
 
-export function LoginScreen({ onLogin, isDarkMode }: LoginScreenProps) {
-  const [activeTab, setActiveTab] = useState<'login' | 'register'>('login');
+export function LoginScreen({ onLogin, onBack, isDarkMode, initialMode = 'login' }: LoginScreenProps) {
+  const [activeTab, setActiveTab] = useState<'login' | 'register'>(initialMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -144,6 +146,15 @@ export function LoginScreen({ onLogin, isDarkMode }: LoginScreenProps) {
           ? 'bg-[#262626] border-[#404040] shadow-[0_0_40px_rgba(255,97,29,0.15)]' 
           : 'bg-white border-[#E7E5E4] shadow-[0_20px_60px_rgba(255,97,29,0.1)]'
       }`}>
+        {onBack && (
+          <button 
+            onClick={onBack}
+            className={`absolute top-6 left-6 w-10 h-10 rounded-full flex items-center justify-center transition-all ${isDarkMode ? 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700' : 'bg-zinc-100 text-zinc-500 hover:text-black hover:bg-zinc-200'}`}
+            title="Kembali ke Landing Page"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+        )}
         {/* Brand Header */}
         <div className="text-center space-y-3 mb-8">
           <div className="w-14 h-14 bg-[#FF611D]/10 rounded-[1.5rem] flex items-center justify-center mx-auto text-[#FF611D]">
@@ -154,7 +165,7 @@ export function LoginScreen({ onLogin, isDarkMode }: LoginScreenProps) {
               Nemuin<span className="text-[#FF611D]">.</span>
             </h1>
             <p className={`text-xs font-bold leading-relaxed max-w-[280px] mx-auto ${isDarkMode ? 'text-[#A8A29E]' : 'text-[#78716C]'}`}>
-              Temukan tempat kuliner terbaik & tersembunyi di Malang. Masuk untuk berjejaring sesama pecinta kuliner!
+              Temukan tempat kuliner terbaik & tersembunyi. Masuk untuk berjejaring sesama pecinta kuliner!
             </p>
           </div>
         </div>

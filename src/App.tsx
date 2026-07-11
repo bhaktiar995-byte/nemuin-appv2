@@ -20,6 +20,7 @@ import { SettingsScreen } from './components/SettingsScreen';
 import { LoginScreen } from './components/LoginScreen';
 import { AdminDashboardScreen } from './components/AdminDashboardScreen';
 import { UserManagePlacesScreen } from './components/UserManagePlacesScreen';
+import { LandingScreen } from './components/LandingScreen';
 import { Restaurant, FoodPost, calculateDistance } from './data/mock';
 
 type ViewMode = 'map' | 'list' | 'detail' | 'chat' | 'order' | 'feed' | 'create_menu' | 'create_resto' | 'create_post' | 'profile' | 'spin' | 'settings' | 'admin' | 'manage_places' | 'edit_resto';
@@ -30,6 +31,8 @@ export default function App() {
   const [posts, setPosts] = useState<FoodPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [authView, setAuthView] = useState<'landing' | 'auth'>('landing');
+  const [initialAuthMode, setInitialAuthMode] = useState<'login' | 'register'>('login');
 
   const isSupabaseConfigured = !!(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY);
 
@@ -413,13 +416,25 @@ export default function App() {
           </div>
         </div>
       ) : !currentUser ? (
-        <LoginScreen 
-          onLogin={(role, email) => {
-            setCurrentUser({ role, email });
-            fetchRestaurants(); // Refetch data to get latest likes and comments
-          }} 
-          isDarkMode={isDarkMode} 
-        />
+        authView === 'landing' ? (
+          <LandingScreen 
+            onNavigateAuth={(mode) => {
+              setInitialAuthMode(mode);
+              setAuthView('auth');
+            }} 
+            isDarkMode={isDarkMode} 
+          />
+        ) : (
+          <LoginScreen 
+            initialMode={initialAuthMode}
+            onBack={() => setAuthView('landing')}
+            onLogin={(role, email) => {
+              setCurrentUser({ role, email });
+              fetchRestaurants(); // Refetch data to get latest likes and comments
+            }} 
+            isDarkMode={isDarkMode} 
+          />
+        )
       ) : (
         <>
           {/* Top Global Header (Dynamic based on View) */}
