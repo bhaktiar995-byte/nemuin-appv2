@@ -14,6 +14,8 @@ interface ListScreenProps {
     priceRange: string[];
     minRating: number;
   };
+  onRefresh?: () => void;
+  isRefreshing?: boolean;
 }
 
 export function ListScreen({ 
@@ -24,7 +26,9 @@ export function ListScreen({
   searchQuery = '', 
   onSearchChange,
   userLocation,
-  filters = { priceRange: [], minRating: 0 }
+  filters = { priceRange: [], minRating: 0 },
+  onRefresh,
+  isRefreshing
 }: ListScreenProps) {
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   
@@ -51,7 +55,7 @@ export function ListScreen({
     <div className="flex-1 w-full flex flex-col h-full relative">
       
       {/* Categories Bar - Centered below global header */}
-      <div className={`shrink-0 px-6 py-6 border-b transition-colors duration-300 sticky top-0 z-20 backdrop-blur-md flex justify-center ${isDarkMode ? 'bg-[#262626]/80 border-[#404040]' : 'bg-[#F6F1EA]/80 border-[#E7E5E4]'}`}>
+      <div className={`shrink-0 px-6 py-6 border-b transition-colors duration-300 sticky top-0 z-20 backdrop-blur-md flex justify-between items-center ${isDarkMode ? 'bg-[#262626]/80 border-[#404040]' : 'bg-[#F6F1EA]/80 border-[#E7E5E4]'}`}>
         <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none justify-start md:justify-center w-full max-w-7xl">
           {['Lalapan', 'Ayam', 'Bakso', 'Nasi Goreng', 'Mie', 'Sate', 'Minuman'].map(category => (
             <button 
@@ -67,6 +71,15 @@ export function ListScreen({
             </button>
           ))}
         </div>
+        {onRefresh && (
+          <button 
+            onClick={onRefresh}
+            className={`ml-4 w-12 h-12 shrink-0 flex items-center justify-center rounded-2xl border transition-all active:scale-95 ${isDarkMode ? 'bg-[#333333] border-[#404040] text-[#A8A29E] hover:text-[#FF611D]' : 'bg-white border-[#E7E5E4] text-[#78716C] hover:text-[#FF611D]'}`}
+            title="Muat Ulang"
+          >
+            <RefreshCw className={`w-5 h-5 ${isRefreshing ? 'animate-spin text-[#FF611D]' : ''}`} />
+          </button>
+        )}
       </div>
 
       {/* List */}

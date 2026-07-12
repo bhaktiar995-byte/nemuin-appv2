@@ -177,14 +177,19 @@ export function AdminApprovalScreen({ isDarkMode, currentUserEmail }: AdminAppro
           .eq('lng', placeToDelete.lng);
       }
 
-      const { error } = await supabase
+      const { error, data } = await supabase
         .from('pending_places')
         .delete()
-        .eq('id', placeId);
+        .eq('id', placeId)
+        .select();
 
       if (error) throw error;
-      setDeleteConfirm(null);
-      await fetchPlaces();
+      if (data && data.length === 0) {
+        alert('Gagal menghapus tempat. Akses ditolak oleh keamanan (RLS) Supabase, atau tempat sudah terhapus. Pastikan policy Delete diizinkan.');
+      } else {
+        setDeleteConfirm(null);
+        await fetchPlaces();
+      }
     } catch (err: any) {
       console.error('Error deleting place:', err);
       alert('Gagal menghapus tempat: ' + (err.message || 'Unknown error'));

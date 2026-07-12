@@ -712,6 +712,7 @@ export default function App() {
                 searchQuery={searchQuery}
                 onSearchChange={setSearchQuery}
                 filters={activeFilters}
+                onRefresh={fetchRestaurants}
               />
             )}
             {view === 'spin' && (

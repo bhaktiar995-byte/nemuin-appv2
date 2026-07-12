@@ -94,14 +94,31 @@ export function UserManagePlacesScreen({ onBack, isDarkMode, currentUserEmail, o
   // Delete a pending place
   const handleDelete = async (placeId: string) => {
     try {
-      const { error } = await supabase
+      const placeToDelete = places.find(p => p.id === placeId);
+      
+      // Jika status disetujui, kemungkinan ada di tabel restaurants, mari hapus juga
+      if (placeToDelete && placeToDelete.status === 'disetujui') {
+        await supabase
+          .from('restaurants')
+          .delete()
+          .eq('name', placeToDelete.name)
+          .eq('lat', placeToDelete.lat)
+          .eq('lng', placeToDelete.lng);
+      }
+
+      const { error, data } = await supabase
         .from('pending_places')
         .delete()
-        .eq('id', placeId);
+        .eq('id', placeId)
+        .select();
 
       if (error) throw error;
-      setDeleteConfirm(null);
-      await fetchPlaces();
+      if (data && data.length === 0) {
+        alert('Gagal menghapus tempat. Akses ditolak oleh keamanan (RLS) Supabase, atau tempat sudah terhapus. Pastikan policy Delete diizinkan untuk pengguna (auth).');
+      } else {
+        setDeleteConfirm(null);
+        await fetchPlaces();
+      }
     } catch (err: any) {
       console.error('Error deleting place:', err);
       alert('Gagal menghapus tempat: ' + (err.message || 'Unknown error'));

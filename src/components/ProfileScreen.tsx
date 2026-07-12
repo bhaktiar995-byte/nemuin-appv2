@@ -62,31 +62,36 @@ export function ProfileScreen({ isDarkMode, onBack, userRole = 'user', userEmail
   });
 
   const [isSavingAd, setIsSavingAd] = useState(false);
+  const [isRefreshingAd, setIsRefreshingAd] = useState(false);
+
+  const loadAdConfig = async () => {
+    if (!userEmail) return;
+    setIsRefreshingAd(true);
+    try {
+      const { data, error } = await supabase
+        .from('pro_popup_ads')
+        .select('*')
+        .eq('user_email', userEmail)
+        .single();
+
+      if (!error && data) {
+        setPopupAdConfig({
+          restaurantId: data.restaurant_id || '',
+          restaurantName: data.restaurant_name || '',
+          promoTitle: data.promo_title || '',
+          promoDesc: data.promo_desc || '',
+          imageUrl: data.image_url || '',
+          active: data.active ?? true
+        });
+      }
+    } catch (err) {
+      console.error("Error loading ad config from DB:", err);
+    } finally {
+      setIsRefreshingAd(false);
+    }
+  };
 
   useEffect(() => {
-    async function loadAdConfig() {
-      if (!userEmail) return;
-      try {
-        const { data, error } = await supabase
-          .from('pro_popup_ads')
-          .select('*')
-          .eq('user_email', userEmail)
-          .single();
-
-        if (!error && data) {
-          setPopupAdConfig({
-            restaurantId: data.restaurant_id || '',
-            restaurantName: data.restaurant_name || '',
-            promoTitle: data.promo_title || '',
-            promoDesc: data.promo_desc || '',
-            imageUrl: data.image_url || '',
-            active: data.active ?? true
-          });
-        }
-      } catch (err) {
-        console.error("Error loading ad config from DB:", err);
-      }
-    }
     loadAdConfig();
   }, [userEmail]);
 
@@ -703,7 +708,13 @@ export function ProfileScreen({ isDarkMode, onBack, userRole = 'user', userEmail
               AKUN {currentTier === 'free' ? 'FREE' : 'PRO'}
             </div>
           </div>
-          <div className="w-10"></div>
+          <button 
+            onClick={loadAdConfig} 
+            className={`p-2 rounded-xl border transition-all ${isDarkMode ? 'bg-[#262626] border-[#404040] text-[#A8A29E] hover:text-white' : 'bg-white border-[#E7E5E4] text-[#78716C] hover:text-black'}`}
+            title="Muat Ulang"
+          >
+            <RefreshCw className={`w-5 h-5 ${isRefreshingAd ? 'animate-spin text-[#FF611D]' : ''}`} />
+          </button>
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 space-y-8">
