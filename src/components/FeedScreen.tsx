@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Heart, MessageCircle, MapPin, Share2, UtensilsCrossed, X, Send, RefreshCw, Check, Trash2 } from 'lucide-react';
+import { Heart, MessageCircle, MapPin, Share2, UtensilsCrossed, X, Send, RefreshCw, Check, Trash2, Edit } from 'lucide-react';
 import { FoodPost } from '../data/mock';
 import { supabase } from '../lib/supabase';
 
@@ -60,34 +60,39 @@ export function FeedScreen({ posts, isDarkMode, onSeed, isSeeding, onCommentStat
       }
     }
   }, [localPosts]);
-  
+
   const getLikesKey = () => `nemuin_likes_${currentUser?.email || 'guest'}`;
 
   // Track likes: session set + DB-backed persistence + localStorage fallback
-  const [likedPostIds, setLikedPostIds] = useState<Set<string>>(() => {
-    // Only initialized initially, effect below syncs with specific user
-    return new Set();
-  });
+  const [likedPostIds, setLikedPostIds] = useState<Set<string>>(() => new Set());
   const [likesTableExists, setLikesTableExists] = useState(true);
 
   // Sync likes from local storage on user change
   useEffect(() => {
-    const saved = localStorage.getItem(getLikesKey());
-    if (saved) {
-      setLikedPostIds(new Set(JSON.parse(saved)));
-    } else {
-      setLikedPostIds(new Set());
+    setLikedPostIds(new Set());
+    if (currentUser?.email) {
+      const saved = localStorage.getItem(`nemuin_likes_${currentUser.email}`);
+      if (saved) {
+        try {
+          setLikedPostIds(new Set(JSON.parse(saved)));
+        } catch {}
+      }
     }
   }, [currentUser?.email]);
 
-  // Comments: DB comments + local optimistic comments as fallback
+  // Comments: DB comments + local optimistic comments as fallback (GLOBAL key for same-device fallback)
   const [dbComments, setDbComments] = useState<any[]>([]);
-  const [localComments, setLocalComments] = useState<Record<string, Array<{id: string, user: string, text: string, time: string}>>>(() => {
+  const [localComments, setLocalComments] = useState<Record<string, Array<{ id: string, user: string, text: string, time: string }>>>(() => {
     const saved = localStorage.getItem('nemuin_comments');
     return saved ? JSON.parse(saved) : {};
   });
   const [loadingComments, setLoadingComments] = useState(false);
   const [commentsTableWorks, setCommentsTableWorks] = useState(true);
+
+  // Clear DB comments on user change, but KEEP global localComments
+  useEffect(() => {
+    setDbComments([]);
+  }, [currentUser?.email]);
 
   useEffect(() => {
     setLocalPosts(posts);
@@ -97,24 +102,22 @@ export function FeedScreen({ posts, isDarkMode, onSeed, isSeeding, onCommentStat
   useEffect(() => {
     const fetchUserLikes = async () => {
       if (!currentUser?.email) return;
-      
+
       try {
         const { data, error } = await supabase
           .from('post_likes')
           .select('post_id')
           .eq('user_email', currentUser.email);
-        
+
         if (error) {
           console.warn('post_likes table not available, using session-only likes:', error.message);
           setLikesTableExists(false);
-        } else if (data && data.length >= 0) {
+        } else if (data) {
           // Sync DB likes with local state (even if 0, it clears old local storage)
-          setLikedPostIds(prev => {
-            const merged = new Set<string>();
-            data.forEach((like: any) => merged.add(like.post_id));
-            localStorage.setItem(getLikesKey(), JSON.stringify(Array.from(merged)));
-            return merged;
-          });
+          const merged = new Set<string>();
+          data.forEach((like: any) => merged.add(like.post_id));
+          setLikedPostIds(merged);
+          localStorage.setItem(`nemuin_likes_${currentUser.email}`, JSON.stringify(Array.from(merged)));
         }
       } catch (err) {
         console.warn('Failed to fetch user likes, falling back to session-only:', err);
@@ -138,7 +141,7 @@ export function FeedScreen({ posts, isDarkMode, onSeed, isSeeding, onCommentStat
           .from('post_comments')
           .select('*')
           .eq('post_id', showComments)
-          .order('created_at', { ascending: true });        
+          .order('created_at', { ascending: true });
         if (!error && data) {
           const mappedData = data.map(c => ({
             ...c,
@@ -174,7 +177,7 @@ export function FeedScreen({ posts, isDarkMode, onSeed, isSeeding, onCommentStat
     const isLiking = !likedPostIds.has(postId);
     const currentLikes = parseInt(postToUpdate.likes as any) || 0;
     const newLikes = isLiking ? currentLikes + 1 : Math.max(0, currentLikes - 1);
-    
+
     // Update local state immediately
     setLikedPostIds(prev => {
       const next = new Set(prev);
@@ -183,10 +186,13 @@ export function FeedScreen({ posts, isDarkMode, onSeed, isSeeding, onCommentStat
       } else {
         next.delete(postId);
       }
-      localStorage.setItem(getLikesKey(), JSON.stringify(Array.from(next)));
+      // Update local storage using the specific user key
+      if (currentUser?.email) {
+        localStorage.setItem(`nemuin_likes_${currentUser.email}`, JSON.stringify(Array.from(next)));
+      }
       return next;
     });
-    
+
     setLocalPosts(prev => prev.map(p => p.id === postId ? { ...p, likes: newLikes } : p));
 
     // Try to persist to database
@@ -249,6 +255,7 @@ export function FeedScreen({ posts, isDarkMode, onSeed, isSeeding, onCommentStat
         ...prev,
         [selectedPost.id]: [...(prev[selectedPost.id] || []), localComment]
       };
+      // Save globally for fallback across accounts on same device
       localStorage.setItem('nemuin_comments', JSON.stringify(next));
       return next;
     });
@@ -323,7 +330,7 @@ export function FeedScreen({ posts, isDarkMode, onSeed, isSeeding, onCommentStat
 
   return (
     <div className={`flex-1 w-full flex flex-col h-full relative overflow-hidden transition-colors duration-300 ${isDarkMode ? 'bg-[#1C1917]' : 'bg-white'}`}>
-      
+
       {/* Feed List */}
       <div className="flex-1 overflow-y-auto p-6 lg:p-12 pb-32">
         {posts.length === 0 ? (
@@ -341,18 +348,17 @@ export function FeedScreen({ posts, isDarkMode, onSeed, isSeeding, onCommentStat
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8 max-w-7xl mx-auto">
             {localPosts.map(post => (
-              <div key={post.id} className={`rounded-[2.5rem] overflow-hidden border transition-all duration-500 flex flex-col h-full group ${
-                isDarkMode 
-                  ? 'bg-[#262626] border-[#404040] shadow-[0_0_30px_rgba(255,97,29,0.25)] hover:shadow-[0_0_60px_rgba(255,97,29,0.5)] hover:border-[#FF611D]/50' 
+              <div key={post.id} className={`rounded-[2.5rem] overflow-hidden border transition-all duration-500 flex flex-col h-full group ${isDarkMode
+                  ? 'bg-[#262626] border-[#404040] shadow-[0_0_30px_rgba(255,97,29,0.25)] hover:shadow-[0_0_60px_rgba(255,97,29,0.5)] hover:border-[#FF611D]/50'
                   : 'bg-white border-[#E7E5E4] shadow-[0_15px_40px_rgba(255,97,29,0.15)] hover:shadow-[0_25px_60px_rgba(255,97,29,0.35)] hover:border-[#FF611D]/50'
-              }`}>
+                }`}>
                 {/* Post Header */}
                 <div className={`p-5 flex items-center justify-between border-b ${isDarkMode ? 'border-[#333333]' : 'border-[#F6F1EA]'}`}>
                   <div className="flex items-center gap-3">
-                    <img 
-                      src={post.userAvatar} 
-                      alt={post.user} 
-                      className={`w-10 h-10 rounded-full object-cover border group-hover:scale-110 group-hover:border-[#FF611D] transition-all duration-300 ${isDarkMode ? 'border-[#404040]' : 'border-[#E7E5E4]'}`} 
+                    <img
+                      src={post.userAvatar}
+                      alt={post.user}
+                      className={`w-10 h-10 rounded-full object-cover border group-hover:scale-110 group-hover:border-[#FF611D] transition-all duration-300 ${isDarkMode ? 'border-[#404040]' : 'border-[#E7E5E4]'}`}
                       referrerPolicy="no-referrer"
                       onError={(e) => { (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${post.user}&background=random` }}
                     />
@@ -362,31 +368,33 @@ export function FeedScreen({ posts, isDarkMode, onSeed, isSeeding, onCommentStat
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <button 
+                    <button
                       onClick={() => handleShare(post.id, post.user)}
                       className={`w-8 h-8 rounded-full flex items-center justify-center hover:bg-[#FF611D]/20 active:scale-90 transition-all ${isDarkMode ? 'bg-[#333333] hover:text-[#FF611D]' : 'bg-[#F6F1EA] hover:text-[#FF611D]'}`}
                       title="Bagikan Postingan"
                     >
                       <Share2 className="w-4 h-4 text-[#A8A29E] transition-colors" />
                     </button>
-                    {onDeletePost && (
-                      <button 
+                    {onDeletePost && (currentUser?.role === 'admin' || currentUser?.email?.split('@')[0] === post.user) && (
+                      <>
+                        <button
                         onClick={() => setShowDeleteConfirm(post.id)}
                         className="w-8 h-8 rounded-full flex items-center justify-center bg-rose-500/10 hover:bg-rose-500/25 active:scale-90 transition-all"
                         title="Hapus Postingan"
                       >
                         <Trash2 className="w-4 h-4 text-rose-500" />
-                      </button>
+                        </button>
+                      </>
                     )}
                   </div>
                 </div>
 
                 {/* Post Image */}
                 <div className="w-full bg-[#E7E5E4] relative aspect-[4/3] overflow-hidden group">
-                  <img 
-                    src={post.image} 
-                    alt="Food discovery" 
-                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" 
+                  <img
+                    src={post.image}
+                    alt="Food discovery"
+                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
                     referrerPolicy="no-referrer"
                     onError={(e) => { (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=800' }}
                   />
@@ -401,18 +409,18 @@ export function FeedScreen({ posts, isDarkMode, onSeed, isSeeding, onCommentStat
                 {/* Post Text */}
                 <div className="p-6 flex-1 flex flex-col">
                   <p className={`text-sm leading-relaxed mb-6 line-clamp-3 italic transition-colors ${isDarkMode ? 'text-[#FAF9F6]' : 'text-[#4B2E2A]'}`}>"{post.content}"</p>
-                  
+
                   {/* Actions */}
                   <div className={`mt-auto flex items-center justify-between border-t pt-5 ${isDarkMode ? 'border-[#333333]' : 'border-[#F6F1EA]'}`}>
                     <div className="flex gap-4">
-                      <button 
+                      <button
                         onClick={() => handleLike(post.id)}
                         className={`flex items-center gap-2 transition-colors group ${likedPostIds.has(post.id) ? 'text-[#FF611D]' : 'text-[#78716C] hover:text-[#FF611D]'}`}
                       >
                         <Heart className={`w-5 h-5 ${likedPostIds.has(post.id) ? 'fill-current' : 'group-hover:fill-current'}`} />
                         <span className="text-xs font-bold">{post.likes}</span>
                       </button>
-                      <button 
+                      <button
                         onClick={() => setShowComments(post.id)}
                         className="flex items-center gap-2 text-[#78716C] hover:text-[#FF611D] transition-colors group"
                       >
@@ -439,7 +447,7 @@ export function FeedScreen({ posts, isDarkMode, onSeed, isSeeding, onCommentStat
                 <h3 className={`text-lg font-bold ${isDarkMode ? 'text-white' : 'text-[#4B2E2A]'}`}>Komentar</h3>
                 <span className={`px-2 py-0.5 rounded text-xs font-bold ${isDarkMode ? 'bg-[#333333] text-[#A8A29E]' : 'bg-[#F6F1EA] text-[#78716C]'}`}>{selectedPost.comments}</span>
               </div>
-              <button 
+              <button
                 onClick={() => setShowComments(null)}
                 className={`w-10 h-10 flex items-center justify-center rounded-full transition-colors ${isDarkMode ? 'bg-[#333333] text-[#78716C] hover:bg-[#404040]' : 'bg-[#F6F1EA] text-[#78716C] hover:bg-[#E7E5E4]'}`}
               >
@@ -461,11 +469,10 @@ export function FeedScreen({ posts, isDarkMode, onSeed, isSeeding, onCommentStat
                     if (allComments.length > 0) {
                       return allComments.map((comment) => (
                         <div key={comment.id} className="flex gap-3 animate-in slide-in-from-right-4 duration-300">
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
-                            comment.user === (currentUser?.email?.split('@')[0] || 'Anda') 
-                              ? 'bg-[#FF611D]/10 text-[#FF611D]' 
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${comment.user === (currentUser?.email?.split('@')[0] || 'Anda')
+                              ? 'bg-[#FF611D]/10 text-[#FF611D]'
                               : 'bg-blue-100 text-blue-600'
-                          }`}>
+                            }`}>
                             <span className="text-xs font-bold">{(comment.user || 'An').substring(0, 2).toUpperCase()}</span>
                           </div>
                           <div className={`flex-1 p-3 rounded-2xl rounded-tl-none transition-colors ${isDarkMode ? 'bg-[#333333]' : 'bg-[#F6F1EA]'}`}>
@@ -496,9 +503,9 @@ export function FeedScreen({ posts, isDarkMode, onSeed, isSeeding, onCommentStat
                 <span className="text-xs font-bold text-white">{userInitials}</span>
               </div>
               <div className={`flex-1 rounded-2xl px-4 py-2 flex items-center border border-transparent focus-within:border-[#FF611D] transition-colors ${isDarkMode ? 'bg-[#333333]' : 'bg-[#F6F1EA]'}`}>
-                <input 
-                  type="text" 
-                  placeholder="Tambah komentar..." 
+                <input
+                  type="text"
+                  placeholder="Tambah komentar..."
                   className={`flex-1 bg-transparent border-none focus:outline-none text-sm ${isDarkMode ? 'text-white placeholder:text-[#78716C]' : 'text-[#4B2E2A] placeholder:text-[#A8A29E]'}`}
                   value={commentText}
                   onChange={(e) => setCommentText(e.target.value)}
@@ -507,7 +514,7 @@ export function FeedScreen({ posts, isDarkMode, onSeed, isSeeding, onCommentStat
                   }}
                   disabled={isSubmitting}
                 />
-                <button 
+                <button
                   onClick={handleComment}
                   disabled={isSubmitting || !commentText.trim()}
                   className={`ml-2 p-1.5 rounded-full transition-colors ${commentText.trim() && !isSubmitting ? 'bg-[#FF611D] text-white' : 'text-[#A8A29E]'}`}
@@ -519,7 +526,7 @@ export function FeedScreen({ posts, isDarkMode, onSeed, isSeeding, onCommentStat
           </div>
         </div>
       )}
-      
+
       {/* Toast Notification */}
       {showToast && (
         <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[9999] flex items-center gap-2 bg-[#FF611D] text-white px-6 py-3 rounded-full shadow-2xl animate-in fade-in slide-in-from-bottom duration-300">
@@ -546,14 +553,14 @@ export function FeedScreen({ posts, isDarkMode, onSeed, isSeeding, onCommentStat
                   </p>
                 </div>
                 <div className="flex gap-3 pt-2 animate-in slide-in-from-bottom duration-300">
-                  <button 
+                  <button
                     onClick={() => setShowDeleteConfirm(null)}
                     disabled={isDeleting}
                     className={`flex-1 h-12 rounded-xl text-xs font-black italic tracking-tighter transition-all ${isDarkMode ? 'bg-[#333333] hover:bg-[#404040]' : 'bg-[#F6F1EA] hover:bg-[#E7E5E4]'}`}
                   >
                     BATAL
                   </button>
-                  <button 
+                  <button
                     onClick={async () => {
                       setIsDeleting(true);
                       try {

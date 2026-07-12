@@ -236,7 +236,7 @@ export function AddFormsScreen({ type, onBack, onSuccess, isDarkMode, currentUse
           user_avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${authorName}`,
           likes: 0,
           comments: 0,
-          date: 'Baru saja',
+          date: new Date().toISOString(),
           location: formData.get('tagged_resto') || ''
         });
         if (postError) throw postError;

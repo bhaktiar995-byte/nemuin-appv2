@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, User as UserIcon, Save, CheckCircle } from 'lucide-react';
+import { Search, User as UserIcon, Save, CheckCircle, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
 interface AdminKelolaPenggunaScreenProps {
@@ -15,6 +15,8 @@ export function AdminKelolaPenggunaScreen({ isDarkMode }: AdminKelolaPenggunaScr
   const [pendingRoleChanges, setPendingRoleChanges] = useState<Record<string, string>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
   const [successId, setSuccessId] = useState<string | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{id: string, email: string} | null>(null);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   const bgColor = isDarkMode ? 'bg-[#1C1917]' : 'bg-[#FAF9F6]';
   const surfaceColor = isDarkMode ? 'bg-[#262626]' : 'bg-white';
@@ -103,6 +105,34 @@ export function AdminKelolaPenggunaScreen({ isDarkMode }: AdminKelolaPenggunaScr
     }
   };
 
+  const handleDeleteUser = async () => {
+    if (!deleteConfirm) return;
+    
+    setActionLoading(deleteConfirm.id);
+    try {
+      const { data, error } = await supabase
+        .from('users_auth')
+        .delete()
+        .eq('id', deleteConfirm.id)
+        .select();
+        
+      if (error) {
+        console.error('Error deleting user:', error);
+        alert(`Gagal menghapus pengguna: ${error.message}`);
+      } else if (data && data.length === 0) {
+        alert('Gagal menghapus pengguna. Akses ditolak oleh keamanan (RLS) Supabase, atau pengguna sudah terhapus. Pastikan policy Delete diizinkan untuk admin.');
+      } else {
+        await fetchUsers();
+      }
+    } catch (err: any) {
+      console.error('Error deleting user:', err);
+      alert(`Gagal menghapus pengguna: ${err.message || 'Unknown error'}`);
+    } finally {
+      setActionLoading(null);
+      setDeleteConfirm(null);
+    }
+  };
+
   const filteredUsers = users.filter(user => 
     user.email?.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -143,7 +173,7 @@ export function AdminKelolaPenggunaScreen({ isDarkMode }: AdminKelolaPenggunaScr
                   <th className="px-4 md:px-6 py-3 md:py-4">Pengguna</th>
                   <th className="px-4 md:px-6 py-3 md:py-4">Role Saat Ini</th>
                   <th className="px-4 md:px-6 py-3 md:py-4">Tanggal Daftar</th>
-                  <th className="px-4 md:px-6 py-3 md:py-4 text-center">Atur Role</th>
+                  <th className="px-4 md:px-6 py-3 md:py-4 text-center">Aksi</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-[#404040]">
@@ -210,6 +240,15 @@ export function AdminKelolaPenggunaScreen({ isDarkMode }: AdminKelolaPenggunaScr
                                 <CheckCircle className="w-3.5 h-3.5" /> Tersimpan!
                               </span>
                             )}
+                            
+                            <button
+                              onClick={() => setDeleteConfirm({id: user.id, email: user.email})}
+                              disabled={isSaving}
+                              className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-500/10 transition-colors disabled:opacity-50"
+                              title="Hapus Pengguna"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
                           </div>
                         </td>
                       </tr>
@@ -226,6 +265,37 @@ export function AdminKelolaPenggunaScreen({ isDarkMode }: AdminKelolaPenggunaScr
         </div>
 
       </div>
+
+      {/* Delete Confirm Modal */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setDeleteConfirm(null)} />
+          <div className={`relative w-full max-w-sm rounded-2xl p-6 text-center shadow-2xl border ${isDarkMode ? 'bg-[#262626] border-[#404040]' : 'bg-white border-[#E7E5E4]'}`}>
+            <div className="w-16 h-16 rounded-full bg-rose-100 text-rose-500 flex items-center justify-center mx-auto mb-4 border-4 border-white dark:border-[#262626] shadow-sm">
+              <Trash2 className="w-8 h-8" />
+            </div>
+            <h3 className="text-xl font-black italic tracking-tighter text-rose-500 mb-2">Hapus Pengguna</h3>
+            <p className={`text-sm mb-6 ${mutedColor}`}>
+              Apakah Anda yakin ingin menghapus pengguna <span className="text-[#FF611D] font-bold">{deleteConfirm.email}</span>? Tindakan ini tidak dapat dibatalkan.
+            </p>
+            <div className="flex gap-3">
+              <button 
+                onClick={() => setDeleteConfirm(null)}
+                className={`flex-1 h-11 rounded-xl text-sm font-bold border ${borderColor} ${mutedColor} transition-colors hover:${isDarkMode ? 'bg-zinc-800' : 'bg-gray-50'}`}
+              >
+                Batal
+              </button>
+              <button 
+                onClick={handleDeleteUser}
+                disabled={actionLoading === deleteConfirm.id}
+                className="flex-1 h-11 bg-rose-500 text-white rounded-xl text-sm font-bold hover:bg-rose-600 transition-colors shadow-sm disabled:opacity-50"
+              >
+                {actionLoading === deleteConfirm.id ? 'MENGHAPUS...' : 'YA, HAPUS'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
