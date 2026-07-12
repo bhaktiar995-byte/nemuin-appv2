@@ -115,13 +115,21 @@ export function LoginScreen({ onLogin, onBack, isDarkMode, initialMode = 'login'
         if (userId) {
           const { data: profileData, error: profileError } = await supabase
             .from('users_auth')
-            .select('role')
+            .select('role, tier')
             .eq('id', userId)
             .single();
 
-          if (!profileError && profileData && (profileData.role === 'admin' || profileData.role === 'user')) {
-            userRole = profileData.role as 'user' | 'admin';
+          if (!profileError && profileData) {
+            if (profileData.role === 'admin' || profileData.role === 'user') {
+              userRole = profileData.role as 'user' | 'admin';
+            }
+            // Set tier from database — ensures Pro accounts stay Pro after login
+            localStorage.setItem('user_tier', profileData.tier || 'free');
+          } else {
+            localStorage.setItem('user_tier', 'free');
           }
+        } else {
+          localStorage.setItem('user_tier', 'free');
         }
 
         setSuccess(`Berhasil masuk! Selamat datang kembali, ${loggedEmail}.`);

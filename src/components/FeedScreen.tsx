@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Heart, MessageCircle, MapPin, Share2, UtensilsCrossed, X, Send, RefreshCw, Check, Trash2 } from 'lucide-react';
+import { Heart, MessageCircle, MapPin, Share2, UtensilsCrossed, X, Send, RefreshCw, Check, Trash2, Crown } from 'lucide-react';
 import { FoodPost } from '../data/mock';
 import { supabase } from '../lib/supabase';
 
@@ -357,7 +357,15 @@ export function FeedScreen({ posts, isDarkMode, onSeed, isSeeding, onCommentStat
                       onError={(e) => { (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${post.user}&background=random` }}
                     />
                     <div>
-                      <h3 className={`text-sm font-bold hover:underline cursor-pointer transition-all duration-300 group-hover:text-[#FF611D] group-hover:drop-shadow-[0_0_8px_rgba(255,97,29,0.3)] ${isDarkMode ? 'text-white' : 'text-[#4B2E2A]'}`}>{post.user}</h3>
+                      <div className="flex items-center gap-1.5">
+                        <h3 className={`text-sm font-bold hover:underline cursor-pointer transition-all duration-300 group-hover:text-[#FF611D] group-hover:drop-shadow-[0_0_8px_rgba(255,97,29,0.3)] ${isDarkMode ? 'text-white' : 'text-[#4B2E2A]'}`}>{post.user}</h3>
+                        {post.isPro && (
+                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-[#FF611D]/10 border border-[#FF611D]/30 text-[#FF611D]" title="Akun Pro">
+                            <Crown className="w-2.5 h-2.5" />
+                            <span className="text-[8px] font-black uppercase tracking-wider">PRO</span>
+                          </span>
+                        )}
+                      </div>
                       <p className="text-[10px] text-[#A8A29E] font-bold uppercase tracking-wider">{post.timeAgo}</p>
                     </div>
                   </div>

@@ -59,6 +59,8 @@ export default function App() {
     minRating: 0,
   });
   const [isCommentOpen, setIsCommentOpen] = useState(false);
+  const [showLoginAdModal, setShowLoginAdModal] = useState(false);
+  const [activeAd, setActiveAd] = useState<any>(null);
 
   useEffect(() => {
     if (navigator.geolocation) {
@@ -107,6 +109,7 @@ export default function App() {
         image: r.image || '',
         coords: [r.lat || 0, r.lng || 0] as [number, number],
         isAvailableOnline: r.is_available_online || false,
+        submitter_email: r.submitter_email,
         menu: (r.menu_items || []).map((m: any) => ({
           id: m.id,
           name: m.name || 'Menu',
@@ -138,6 +141,16 @@ export default function App() {
       }
 
       console.log("Mapping posts, count:", postsData?.length);
+
+      // Fetch Pro tiers from users_auth to attach to posts
+      const { data: proUsers } = await supabase
+        .from('users_auth')
+        .select('email, tier')
+        .eq('tier', 'pro');
+      const proEmailSet = new Set(
+        (proUsers || []).map((u: any) => u.email?.split('@')[0].toLowerCase())
+      );
+
       const mappedPosts: FoodPost[] = (postsData || []).map(p => ({
         id: p.id,
         user: p.author || 'Anonymous',
@@ -149,7 +162,8 @@ export default function App() {
         timeAgo: p.created_at 
           ? new Date(p.created_at).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) 
           : (p.date || 'Baru Saja'),
-        location: p.location
+        location: p.location,
+        isPro: proEmailSet.has((p.author || '').toLowerCase())
       }));
 
       setRestaurants(mappedRestos);
@@ -433,6 +447,33 @@ export default function App() {
             onLogin={(role, email) => {
               setCurrentUser({ role, email });
               fetchRestaurants(); // Refetch data to get latest likes and comments
+              
+              // Trigger pop-up ad
+              const savedAd = localStorage.getItem('pro_popup_ad');
+              if (savedAd) {
+                try {
+                  const parsed = JSON.parse(savedAd);
+                  if (parsed && parsed.active) {
+                    setActiveAd(parsed);
+                    setShowLoginAdModal(true);
+                  }
+                } catch (e) {
+                  console.error("Error parsing popup ad", e);
+                }
+              } else {
+                // Seed a default active ad for demo if not configured yet
+                const defaultAd = {
+                  restaurantId: '',
+                  restaurantName: 'Ayam Bawang Cak Per',
+                  promoTitle: 'Diskon Spesial 25%!',
+                  promoDesc: 'Dapatkan diskon 25% khusus pengguna baru aplikasi Nemuin!',
+                  imageUrl: 'https://images.unsplash.com/photo-1549488344-c1fb6724b07f?auto=format&fit=crop&q=80&w=800',
+                  active: true
+                };
+                localStorage.setItem('pro_popup_ad', JSON.stringify(defaultAd));
+                setActiveAd(defaultAd);
+                setShowLoginAdModal(true);
+              }
             }} 
             isDarkMode={isDarkMode} 
           />
@@ -764,9 +805,11 @@ export default function App() {
                 userRole={currentUser?.role}
                 userEmail={currentUser?.email}
                 onLogout={() => {
+                  localStorage.removeItem('user_tier');
                   setCurrentUser(null);
                   setView('list');
                 }}
+                restaurants={restaurants}
               />
             )}
             {view === 'settings' && (
@@ -946,6 +989,81 @@ export default function App() {
                   userLocation={userLocation}
                   isDarkMode={isDarkMode}
                 />
+              </div>
+            </div>
+          )}
+
+          {/* Pop-up Ad Modal for Akun Pro (shown on login) */}
+          {showLoginAdModal && activeAd && (
+            <div className="fixed inset-0 z-[250] flex items-center justify-center p-4 animate-in fade-in duration-300">
+              <div 
+                className="absolute inset-0 bg-black/70 backdrop-blur-md" 
+                onClick={() => setShowLoginAdModal(false)}
+              />
+              <div className={`relative w-full max-w-md rounded-[3rem] overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.5)] border animate-in zoom-in-95 duration-300 ${
+                isDarkMode ? 'bg-[#1C1917] border-[#404040]' : 'bg-white border-[#E7E5E4]'
+              }`}>
+                {/* Header Banner */}
+                <div className="relative h-48 w-full overflow-hidden">
+                  <img 
+                    src={activeAd.imageUrl || 'https://images.unsplash.com/photo-1549488344-c1fb6724b07f?auto=format&fit=crop&q=80&w=800'} 
+                    alt="Promo"
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
+                  <div className="absolute bottom-4 left-6 right-6">
+                    <span className="px-2 py-0.5 bg-[#FF611D] text-white text-[8px] font-black uppercase tracking-wider rounded-full">PRO MEMBER PROMO</span>
+                    <h3 className="text-white text-lg font-black mt-1 uppercase tracking-tight">{activeAd.restaurantName}</h3>
+                  </div>
+                </div>
+
+                {/* Content */}
+                <div className="p-6 space-y-4">
+                  <div>
+                    <h4 className={`text-base font-black ${isDarkMode ? 'text-white' : 'text-[#4B2E2A]'}`}>{activeAd.promoTitle}</h4>
+                    <p className={`text-xs font-medium mt-2 leading-relaxed ${isDarkMode ? 'text-[#A8A29E]' : 'text-[#78716C]'}`}>{activeAd.promoDesc}</p>
+                  </div>
+
+                  <div className="flex flex-col gap-2 pt-2">
+                    <button
+                      onClick={() => {
+                        setShowLoginAdModal(false);
+                        if (activeAd.restaurantId) {
+                          const resto = restaurants.find(r => r.id === activeAd.restaurantId);
+                          if (resto) {
+                            setSelectedRestaurant(resto);
+                            setIsDetailModalOpen(true);
+                          } else {
+                            // Fallback, if not found, navigate to detail of standard resto
+                            const fallbackResto = restaurants[0];
+                            if (fallbackResto) {
+                              setSelectedRestaurant(fallbackResto);
+                              setIsDetailModalOpen(true);
+                            }
+                          }
+                        } else {
+                          // Default fallback
+                          const fallbackResto = restaurants[0];
+                          if (fallbackResto) {
+                            setSelectedRestaurant(fallbackResto);
+                            setIsDetailModalOpen(true);
+                          }
+                        }
+                      }}
+                      className="w-full py-3.5 bg-[#FF611D] text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:scale-102 active:scale-95 transition-all shadow-md"
+                    >
+                      Lihat Tempat Makan
+                    </button>
+                    <button
+                      onClick={() => setShowLoginAdModal(false)}
+                      className={`w-full py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                        isDarkMode ? 'bg-[#262626] text-[#A8A29E] hover:bg-[#333333]' : 'bg-[#F6F1EA] text-[#78716C] hover:bg-[#E7E5E4]'
+                      }`}
+                    >
+                      Tutup
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           )}

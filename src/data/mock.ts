@@ -50,6 +50,7 @@ export interface Restaurant {
   menu: MenuItem[];
   reviews: Review[];
   isAvailableOnline: boolean;
+  submitter_email?: string;
 }
 
 export interface FoodPost {
@@ -62,6 +63,7 @@ export interface FoodPost {
   comments: number;
   timeAgo: string;
   location?: string;
+  isPro?: boolean;
 }
 
 export const FOOD_POSTS: FoodPost[] = [

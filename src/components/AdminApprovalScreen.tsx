@@ -82,7 +82,8 @@ export function AdminApprovalScreen({ isDarkMode, currentUserEmail }: AdminAppro
           image: place.image,
           rating: 0,
           review_count: 0,
-          is_available_online: true
+          is_available_online: true,
+          submitter_email: place.submitter_email
         })
         .select()
         .single();
