@@ -27,13 +27,13 @@ export function LandingScreen({ onNavigateAuth, isDarkMode }: LandingScreenProps
           </p>
         </div>
         <div className="flex items-center gap-4">
-          <button 
+          <button
             onClick={() => onNavigateAuth('login')}
             className={`px-5 py-2.5 rounded-full font-bold text-sm transition-all border ${isDarkMode ? 'border-zinc-700 hover:bg-zinc-800' : 'bg-white border-[#E7E5E4] hover:bg-zinc-50 shadow-sm'}`}
           >
             Masuk
           </button>
-          <button 
+          <button
             onClick={() => onNavigateAuth('register')}
             className="px-5 py-2.5 bg-[#FF611D] text-white rounded-full font-bold text-sm shadow-lg shadow-[#FF611D]/30 hover:scale-105 active:scale-95 transition-all"
           >
@@ -65,19 +65,19 @@ export function LandingScreen({ onNavigateAuth, isDarkMode }: LandingScreenProps
           </p>
 
           {/* Feature Icons Row */}
-          <div className="flex flex-wrap gap-6 pt-2">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-2">
             {[
               { icon: MapPin, text: '500+', sub: 'Tempat Makan' },
               { icon: Star, text: 'Review Asli', sub: 'Pengguna' },
               { icon: RefreshCw, text: 'Lucky Spin', sub: 'Rekomendasi' },
               { icon: Flame, text: 'Kuliner Viral', sub: 'Setiap Hari' }
             ].map((feature, idx) => (
-              <div key={idx} className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-[#FF611D]/10 flex items-center justify-center text-[#FF611D]">
-                  <feature.icon className="w-5 h-5" />
+              <div key={idx} className="flex items-center gap-2">
+                <div className="w-9 h-9 rounded-full bg-[#FF611D]/10 flex items-center justify-center text-[#FF611D] shrink-0">
+                  <feature.icon className="w-4 h-4" />
                 </div>
                 <div className="flex flex-col">
-                  <span className="text-sm font-black">{feature.text}</span>
+                  <span className="text-xs md:text-sm font-black">{feature.text}</span>
                   <span className={`text-[10px] font-bold uppercase tracking-wider ${isDarkMode ? 'text-zinc-400' : 'text-zinc-500'}`}>{feature.sub}</span>
                 </div>
               </div>
@@ -85,13 +85,13 @@ export function LandingScreen({ onNavigateAuth, isDarkMode }: LandingScreenProps
           </div>
 
           <div className="flex flex-wrap items-center gap-4 pt-4">
-            <button 
+            <button
               onClick={() => onNavigateAuth('login')}
               className="px-8 py-4 bg-[#FF611D] text-white rounded-full font-black text-sm flex items-center gap-2 shadow-[0_8px_25px_rgba(255,97,29,0.3)] hover:scale-105 active:scale-95 transition-all"
             >
               Jelajahi Sekarang <ArrowRight className="w-4 h-4" />
             </button>
-            <button 
+            <button
               onClick={scrollToHowItWorks}
               className={`px-8 py-4 rounded-full font-black text-sm flex items-center gap-2 transition-all border ${isDarkMode ? 'border-zinc-700 hover:bg-zinc-800' : 'bg-white border-[#E7E5E4] hover:bg-zinc-50 shadow-sm'}`}
             >
@@ -101,35 +101,21 @@ export function LandingScreen({ onNavigateAuth, isDarkMode }: LandingScreenProps
         </div>
 
         {/* Right Content - Mockups */}
-        <div className="flex-1 relative mt-16 lg:mt-0 min-h-[600px] w-full lg:ml-24 flex justify-center items-center lg:translate-x-8">
-            {/* Base orange circle */}
-            <div className="absolute right-0 top-1/2 -translate-y-1/2 w-[400px] lg:w-[600px] h-[400px] lg:h-[600px] bg-gradient-to-tr from-[#FF611D] to-orange-400 rounded-full z-0 overflow-hidden">
-                <div className="absolute inset-0 bg-white/10 mix-blend-overlay"></div>
-            </div>
+        <div className="flex-1 relative mt-10 lg:mt-0 min-h-[480px] lg:min-h-[700px] w-full flex justify-center items-center lg:translate-x-10">
+          {/* Base orange circle */}
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[260px] md:w-[300px] lg:w-[360px] h-[260px] md:h-[300px] lg:h-[360px] bg-gradient-to-tr from-[#FF611D] to-[#FF8B5E] rounded-full z-0 shadow-[0_0_80px_rgba(255,97,29,0.3)]">
+            <div className="absolute inset-0 bg-white/10 mix-blend-overlay rounded-full"></div>
+          </div>
 
-            {/* Mockups Container */}
-            <div className="relative z-10 w-full h-full flex justify-center items-center gap-4 lg:gap-6 perspective-[1000px] transform-gpu">
-                {/* Left Mockup (Feed/Explore) */}
-                <div className="w-[220px] h-[400px] rounded-[2rem] border-[6px] border-black bg-[#FAF9F6] shadow-2xl overflow-hidden transform rotate-[-10deg] translate-y-12 translate-x-12 z-10 relative shrink-0">
-                    <img src="/mockup-feed.png" alt="Feed Mockup" className="w-full h-full object-contain object-center scale-[1.02]" onError={(e) => { e.currentTarget.src = 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=400'; }} />
-                    {/* Notch placeholder */}
-                    <div className="absolute top-0 left-1/2 -translate-x-1/2 w-16 h-4 bg-black rounded-b-xl z-20"></div>
-                </div>
-
-                {/* Center Mockup (Detail) */}
-                <div className="w-[260px] h-[470px] rounded-[2.5rem] border-[8px] border-black bg-[#FAF9F6] shadow-2xl overflow-hidden transform z-30 -translate-y-4 relative shrink-0">
-                    <img src="/mockup-home.png" alt="Home Mockup" className="w-full h-full object-contain object-center scale-[1.02]" onError={(e) => { e.currentTarget.src = 'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?auto=format&fit=crop&q=80&w=400'; }} />
-                    {/* Notch placeholder */}
-                    <div className="absolute top-0 left-1/2 -translate-x-1/2 w-20 h-5 bg-black rounded-b-xl z-20"></div>
-                </div>
-
-                {/* Right Mockup (Lucky Spin) */}
-                <div className="w-[220px] h-[400px] rounded-[2rem] border-[6px] border-black bg-[#FAF9F6] shadow-2xl overflow-hidden transform rotate-[10deg] translate-y-12 -translate-x-12 z-20 relative shrink-0">
-                    <img src="/mockup-spin.png" alt="Spin Mockup" className="w-full h-full object-contain object-center scale-[1.02]" onError={(e) => { e.currentTarget.src = 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=400'; }} />
-                    {/* Notch placeholder */}
-                    <div className="absolute top-0 left-1/2 -translate-x-1/2 w-16 h-4 bg-black rounded-b-xl z-20"></div>
-                </div>
-            </div>
+          {/* Mockups Container */}
+          <div className="relative z-10 flex justify-center items-center group cursor-pointer w-full">
+            <img
+              src="/mockup-hp.svg"
+              alt="Nemuin App Mockup"
+              className="w-full max-w-[420px] md:max-w-[480px] lg:max-w-[580px] object-contain drop-shadow-[0_30px_50px_rgba(0,0,0,0.3)] transition-all duration-500 group-hover:-translate-y-3 group-hover:scale-[1.03]"
+              onError={(e) => { e.currentTarget.src = 'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?auto=format&fit=crop&q=80&w=400'; }}
+            />
+          </div>
         </div>
       </div>
 
