@@ -311,7 +311,7 @@ export function AdminDashboardScreen({ isDarkMode, onBack, currentUser }: AdminD
           <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
             {[
-              { title: 'Total Pengguna', value: String(totalUsers), subtitle: 'Terdaftar di database', icon: Users, color: 'text-orange-500', bg: 'bg-orange-50', trend: null },
+              { title: 'Total Pengguna', value: String(totalUsers), subtitle: 'Terdaftar', icon: Users, color: 'text-orange-500', bg: 'bg-orange-50', trend: null },
               { title: 'Total Tempat Makan', value: String(totalRestos), subtitle: 'Dipublish', icon: Store, color: 'text-orange-500', bg: 'bg-orange-50', trend: null },
               { title: 'Pending Approval', value: String(pendingCount), subtitle: 'Menunggu ACC', icon: Hourglass, color: 'text-orange-500', bg: 'bg-orange-50', trend: false },
               { title: 'Total Review', value: String(totalReviews), subtitle: 'Ulasan terkumpul', icon: Star, color: 'text-green-500', bg: 'bg-green-50', trend: null },

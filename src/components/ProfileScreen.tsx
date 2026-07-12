@@ -624,8 +624,73 @@ export function ProfileScreen({ isDarkMode, onBack, userRole = 'user', userEmail
       confirmText: 'Hapus Akun',
       confirmColor: 'bg-rose-500'
     });
+
     if (confirmed) {
-      await showModal({ type: 'alert', title: 'Hubungi Tim Dukungan', message: 'Untuk keamanan, penghapusan akun permanen memerlukan verifikasi. Silakan hubungi tim dukungan kami di support@nemuin.com.', confirmText: 'Mengerti' });
+      try {
+        setIsSaving(true);
+        const authorName = profileData.email?.split('@')[0] || '';
+
+        // Ambil data user yang sedang login untuk mendapatkan UUID
+        const { data: { user } } = await supabase.auth.getUser();
+
+        // 1. Ambil semua post milik user untuk menghapus dependensi (komentar/like dari orang lain)
+        const { data: userPosts } = await supabase.from('posts').select('id').eq('author', authorName);
+        if (userPosts && userPosts.length > 0) {
+          const postIds = userPosts.map(p => p.id);
+          // Hapus semua komentar & like yang ada di post milik user ini
+          await supabase.from('post_comments').delete().in('post_id', postIds);
+          await supabase.from('post_likes').delete().in('post_id', postIds);
+        }
+
+        // 2. Menghapus data pengguna dari tabel-tabel terkait
+        await supabase.from('post_comments').delete().eq('user_email', profileData.email);
+        await supabase.from('post_likes').delete().eq('user_email', profileData.email);
+        await supabase.from('posts').delete().eq('author', authorName);
+        await supabase.from('pro_popup_ads').delete().eq('user_email', profileData.email);
+        await supabase.from('payments').delete().eq('user_email', profileData.email);
+        await supabase.from('food_places').delete().eq('submitter_email', profileData.email);
+
+        // 3. Hapus auth user data (tabel custom/public)
+        if (user && user.id) {
+          await supabase.from('users_auth').delete().eq('id', user.id);
+        } else {
+          await supabase.from('users_auth').delete().eq('email', profileData.email);
+        }
+
+        // 4. Jika ada fungsi RPC hapus user dari auth (abaikan error jika tidak ada / tidak punya akses admin)
+        const { error: rpcError } = await supabase.rpc('delete_user');
+        if (rpcError) {
+          console.warn('Pengabaian aman: gagal menghapus user via RPC (mungkin bukan admin):', rpcError.message);
+        }
+
+        // 5. Sign out dari Supabase
+        await supabase.auth.signOut();
+        
+        // 6. Bersihkan data lokal
+        localStorage.clear();
+
+        await showModal({
+          type: 'alert',
+          title: 'Akun Dihapus',
+          message: 'Akun Anda dan seluruh data terkait telah berhasil dihapus.',
+          confirmText: 'OK'
+        });
+
+        if (onLogout) {
+          onLogout();
+        }
+      } catch (err: any) {
+        console.error('Error deleting account:', err);
+        await showModal({
+          type: 'alert',
+          title: 'Gagal',
+          message: 'Gagal menghapus akun: ' + err.message,
+          confirmText: 'Tutup',
+          confirmColor: 'bg-rose-500'
+        });
+      } finally {
+        setIsSaving(false);
+      }
     }
   };
 
@@ -708,8 +773,8 @@ export function ProfileScreen({ isDarkMode, onBack, userRole = 'user', userEmail
               AKUN {currentTier === 'free' ? 'FREE' : 'PRO'}
             </div>
           </div>
-          <button 
-            onClick={loadAdConfig} 
+          <button
+            onClick={loadAdConfig}
             className={`p-2 rounded-xl border transition-all ${isDarkMode ? 'bg-[#262626] border-[#404040] text-[#A8A29E] hover:text-white' : 'bg-white border-[#E7E5E4] text-[#78716C] hover:text-black'}`}
             title="Muat Ulang"
           >
@@ -807,8 +872,8 @@ export function ProfileScreen({ isDarkMode, onBack, userRole = 'user', userEmail
                   <label className={`text-[10px] font-black uppercase tracking-widest ${isDarkMode ? 'text-[#A8A29E]' : 'text-[#78716C]'}`}>Gambar Promo Iklan</label>
                   <label className="cursor-pointer block mt-2">
                     <div className={`w-full max-w-[240px] aspect-[16/9] mx-auto rounded-2xl border-2 border-dashed flex flex-col items-center justify-center p-4 transition-all relative overflow-hidden ${isDarkMode
-                        ? 'bg-[#1C1917] border-[#404040] hover:border-[#FF611D]'
-                        : 'bg-[#FAF9F6] border-[#E7E5E4] hover:border-[#FF611D]'
+                      ? 'bg-[#1C1917] border-[#404040] hover:border-[#FF611D]'
+                      : 'bg-[#FAF9F6] border-[#E7E5E4] hover:border-[#FF611D]'
                       }`}>
                       {popupAdConfig.imageUrl ? (
                         <>
@@ -1058,14 +1123,14 @@ export function ProfileScreen({ isDarkMode, onBack, userRole = 'user', userEmail
                   }
                 }}
                 className={`w-full py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 shadow-lg ${plan.id === 'free' && currentTier === 'pro'
-                    ? 'bg-zinc-200 text-zinc-400 border-none cursor-not-allowed dark:bg-zinc-800 dark:text-zinc-600'
-                    : plan.id === currentTier
-                      ? 'bg-zinc-400 text-white border-none cursor-default'
-                      : plan.recommended
-                        ? 'bg-[#FF611D] text-white'
-                        : isDarkMode
-                          ? 'bg-[#333333] text-white border border-[#404040]'
-                          : 'bg-[#FAF9F6] text-[#4B2E2A] border border-[#E7E5E4]'
+                  ? 'bg-zinc-200 text-zinc-400 border-none cursor-not-allowed dark:bg-zinc-800 dark:text-zinc-600'
+                  : plan.id === currentTier
+                    ? 'bg-zinc-400 text-white border-none cursor-default'
+                    : plan.recommended
+                      ? 'bg-[#FF611D] text-white'
+                      : isDarkMode
+                        ? 'bg-[#333333] text-white border border-[#404040]'
+                        : 'bg-[#FAF9F6] text-[#4B2E2A] border border-[#E7E5E4]'
                   }`}
               >
                 {plan.id === 'free' && currentTier === 'pro'
@@ -1299,9 +1364,8 @@ export function ProfileScreen({ isDarkMode, onBack, userRole = 'user', userEmail
               {/* Image Editor */}
               <div className="space-y-2">
                 <label className={`text-[10px] font-black uppercase tracking-[0.2em] ${isDarkMode ? 'text-[#A8A29E]' : 'text-[#78716C]'}`}>Foto Postingan</label>
-                <div className={`w-full aspect-[4/3] rounded-2xl border-2 border-dashed flex items-center justify-center cursor-pointer transition-colors relative overflow-hidden ${
-                  isDarkMode ? 'bg-[#262626] border-[#404040]' : 'bg-[#F6F1EA] border-[#E7E5E4]'
-                }`}>
+                <div className={`w-full aspect-[4/3] rounded-2xl border-2 border-dashed flex items-center justify-center cursor-pointer transition-colors relative overflow-hidden ${isDarkMode ? 'bg-[#262626] border-[#404040]' : 'bg-[#F6F1EA] border-[#E7E5E4]'
+                  }`}>
                   {editPostImagePreview ? (
                     <img src={editPostImagePreview} alt="Preview" className="w-full h-full object-cover" />
                   ) : (

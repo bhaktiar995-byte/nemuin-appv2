@@ -30,6 +30,7 @@ export default function App() {
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [posts, setPosts] = useState<FoodPost[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isSessionChecked, setIsSessionChecked] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [authView, setAuthView] = useState<'landing' | 'auth'>('landing');
   const [initialAuthMode, setInitialAuthMode] = useState<'login' | 'register'>('login');
@@ -40,7 +41,55 @@ export default function App() {
     if (!isSupabaseConfigured) {
       setError("Supabase belum terkonfigurasi. Silakan tambahkan VITE_SUPABASE_URL dan VITE_SUPABASE_ANON_KEY di Settings > Secrets.");
       setLoading(false);
+      return;
     }
+
+    const checkSession = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user && session.user.email) {
+          const { data } = await supabase
+            .from('users_auth')
+            .select('role')
+            .eq('email', session.user.email)
+            .single();
+          
+          setCurrentUser({ 
+            email: session.user.email, 
+            role: data?.role || 'user' 
+          });
+        }
+      } catch (err) {
+        console.error("Error checking session:", err);
+      } finally {
+        setIsSessionChecked(true);
+      }
+    };
+
+    checkSession();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (session?.user && session.user.email) {
+        // Prevent unnecessary state updates if we already have the user
+        setCurrentUser(prev => {
+          if (prev?.email === session.user.email) return prev;
+          
+          // If different, fetch role and update
+          supabase.from('users_auth').select('role').eq('email', session.user.email).single()
+            .then(({ data }) => {
+              setCurrentUser({ email: session.user.email!, role: data?.role || 'user' });
+            });
+            
+          return { email: session.user.email, role: 'user' }; // Optimistic
+        });
+      } else if (event === 'SIGNED_OUT') {
+        setCurrentUser(null);
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, [isSupabaseConfigured]);
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
   const [view, setView] = useState<ViewMode>('list');
@@ -407,12 +456,7 @@ export default function App() {
 
   return (
     <div className={`h-screen flex flex-col font-sans overflow-hidden relative transition-colors duration-300 ${isDarkMode ? 'bg-[#1C1917] text-[#FAF9F6]' : 'bg-white text-[#4B2E2A]'}`}>
-      {loading ? (
-        <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-[#FAF9F6]">
-          <RefreshCw className="w-12 h-12 text-[#FF611D] animate-spin mb-4" />
-          <h2 className="text-xl font-black italic tracking-tighter text-[#4B2E2A]">Mencari tempat terbaik...</h2>
-        </div>
-      ) : error ? (
+      {error ? (
         <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-[#FAF9F6]">
           <div className="w-20 h-20 bg-orange-100 rounded-[2rem] flex items-center justify-center mb-6">
             <Settings className="w-10 h-10 text-[#FF611D]" />
@@ -430,6 +474,11 @@ export default function App() {
               <li>Refresh halaman ini.</li>
             </ol>
           </div>
+        </div>
+      ) : (!isSessionChecked || loading) ? (
+        <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-[#FAF9F6]">
+          <RefreshCw className="w-12 h-12 text-[#FF611D] animate-spin mb-4" />
+          <h2 className="text-xl font-black italic tracking-tighter text-[#4B2E2A]">Mencari tempat terbaik...</h2>
         </div>
       ) : !currentUser ? (
         authView === 'landing' ? (
@@ -762,6 +811,7 @@ export default function App() {
                 onCommentStateChange={setIsCommentOpen}
                 currentUser={currentUser}
                 onDeletePost={handleDeletePost}
+                onRefresh={fetchRestaurants}
               />
             )}
             {view === 'create_menu' && (

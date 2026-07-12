@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, User as UserIcon, Save, CheckCircle, Trash2 } from 'lucide-react';
+import { Search, User as UserIcon, Save, CheckCircle, Trash2, RefreshCw } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
 interface AdminKelolaPenggunaScreenProps {
@@ -165,6 +165,14 @@ export function AdminKelolaPenggunaScreen({ isDarkMode }: AdminKelolaPenggunaScr
         <div className={`${surfaceColor} rounded-2xl border ${borderColor} flex flex-col shadow-sm overflow-hidden`}>
           <div className="flex justify-between items-center p-4 md:p-6 border-b border-transparent">
             <h3 className={`text-base md:text-lg font-bold italic tracking-tight ${textColor}`}>Daftar Pengguna ({users.length})</h3>
+            <button
+              onClick={fetchUsers}
+              disabled={loading}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${isDarkMode ? 'bg-[#333333] text-white hover:bg-[#404040]' : 'bg-white text-[#4B2E2A] hover:bg-gray-50 border border-[#E7E5E4] shadow-sm'}`}
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+              <span className="hidden sm:inline">Refresh</span>
+            </button>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm whitespace-nowrap min-w-[600px]">

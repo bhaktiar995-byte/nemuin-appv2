@@ -11,9 +11,10 @@ interface FeedScreenProps {
   onCommentStateChange?: (isOpen: boolean) => void;
   currentUser?: { email: string; role: 'user' | 'admin' } | null;
   onDeletePost?: (postId: string) => Promise<void>;
+  onRefresh?: () => void;
 }
 
-export function FeedScreen({ posts, isDarkMode, onSeed, isSeeding, onCommentStateChange, currentUser, onDeletePost }: FeedScreenProps) {
+export function FeedScreen({ posts, isDarkMode, onSeed, isSeeding, onCommentStateChange, currentUser, onDeletePost, onRefresh }: FeedScreenProps) {
   const [showComments, setShowComments] = useState<string | null>(null);
   const [commentText, setCommentText] = useState('');
   const [localPosts, setLocalPosts] = useState<FoodPost[]>(posts);
@@ -332,9 +333,29 @@ export function FeedScreen({ posts, isDarkMode, onSeed, isSeeding, onCommentStat
     <div className={`flex-1 w-full flex flex-col h-full relative overflow-hidden transition-colors duration-300 ${isDarkMode ? 'bg-[#1C1917]' : 'bg-white'}`}>
 
       {/* Feed List */}
-      <div className="flex-1 overflow-y-auto p-6 lg:p-12 pb-32">
+      <div className="flex-1 overflow-y-auto p-6 lg:p-12 pb-32 relative">
+        <div className="absolute top-4 right-6 z-10 hidden md:flex">
+           <button 
+             onClick={() => onRefresh ? onRefresh() : window.location.reload()} 
+             className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-md active:scale-95 ${isDarkMode ? 'bg-[#262626] text-white hover:bg-[#333333] border border-[#404040]' : 'bg-white text-[#4B2E2A] hover:bg-gray-50 border border-[#E7E5E4]'}`}
+           >
+             <RefreshCw className="w-4 h-4" /> Refresh Feed
+           </button>
+        </div>
+        
+        {/* Mobile floating refresh button */}
+        <div className="fixed bottom-24 right-4 z-50 md:hidden">
+           <button 
+             onClick={() => onRefresh ? onRefresh() : window.location.reload()} 
+             className="flex items-center justify-center w-12 h-12 bg-[#FF611D] text-white rounded-full shadow-xl active:scale-90 transition-transform"
+             title="Refresh Feed"
+           >
+             <RefreshCw className="w-5 h-5" />
+           </button>
+        </div>
+
         {posts.length === 0 ? (
-          <div className="flex flex-col items-center justify-center text-center py-20 max-w-lg mx-auto">
+          <div className="flex flex-col items-center justify-center text-center py-20 max-w-lg mx-auto mt-10">
             <div className="w-20 h-20 bg-orange-100 rounded-[2rem] flex items-center justify-center mb-6 text-[#FF611D]">
               <UtensilsCrossed className="w-8 h-8" />
             </div>
@@ -346,7 +367,7 @@ export function FeedScreen({ posts, isDarkMode, onSeed, isSeeding, onCommentStat
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8 max-w-7xl mx-auto">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8 max-w-7xl mx-auto pt-10 md:pt-6">
             {localPosts.map(post => (
               <div key={post.id} className={`rounded-[2.5rem] overflow-hidden border transition-all duration-500 flex flex-col h-full group ${isDarkMode
                   ? 'bg-[#262626] border-[#404040] shadow-[0_0_30px_rgba(255,97,29,0.25)] hover:shadow-[0_0_60px_rgba(255,97,29,0.5)] hover:border-[#FF611D]/50'
