@@ -760,7 +760,7 @@ export default function App() {
                 isSeeding={isSeeding}
                 onCommentStateChange={setIsCommentOpen}
                 currentUser={currentUser}
-                onDeletePost={currentUser?.role === 'admin' ? handleDeletePost : undefined}
+                onDeletePost={handleDeletePost}
               />
             )}
             {view === 'create_menu' && (

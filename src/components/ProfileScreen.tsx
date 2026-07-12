@@ -1,5 +1,5 @@
-import { User, Settings, LogOut, ChevronRight, Award, Heart, MessageSquare, Moon, Sun, ChevronLeft, CreditCard, Edit, Crown, Check, X, Camera, Trophy, MapPin, Settings2, Plus, Store, Clock, Trash2, MessageCircle, QrCode, RefreshCw } from 'lucide-react';
-import React, { useState, useEffect } from 'react';
+import { User, Settings, LogOut, ChevronRight, Award, Heart, MessageSquare, Moon, Sun, ChevronLeft, CreditCard, Edit, Crown, Check, X, Camera, Trophy, MapPin, Settings2, Plus, Store, Clock, Trash2, MessageCircle, QrCode, RefreshCw, Send, ImagePlus } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '@/lib/supabase';
 
@@ -200,6 +200,20 @@ export function ProfileScreen({ isDarkMode, onBack, userRole = 'user', userEmail
 
   const [isSaving, setIsSaving] = useState(false);
   const [userPosts, setUserPosts] = useState<any[]>([]);
+
+  // Post comments state
+  const [showPostComments, setShowPostComments] = useState<string | null>(null);
+  const [postComments, setPostComments] = useState<any[]>([]);
+  const [loadingPostComments, setLoadingPostComments] = useState(false);
+  const [commentText, setCommentText] = useState('');
+  const [submittingComment, setSubmittingComment] = useState(false);
+
+  // Edit post with image state
+  const [editingPost, setEditingPost] = useState<any | null>(null);
+  const [editPostContent, setEditPostContent] = useState('');
+  const [editPostImagePreview, setEditPostImagePreview] = useState<string | null>(null);
+  const [editPostImageFile, setEditPostImageFile] = useState<File | null>(null);
+  const [savingEdit, setSavingEdit] = useState(false);
   const [isLoadingPosts, setIsLoadingPosts] = useState(false);
 
   const [modalConfig, setModalConfig] = useState<{
@@ -260,23 +274,107 @@ export function ProfileScreen({ isDarkMode, onBack, userRole = 'user', userEmail
     }
   };
 
-  const handleEditPost = async (post: any) => {
-    const newContent = await showModal({
-      type: 'prompt',
-      title: 'Edit Postingan',
-      message: 'Ubah teks postingan Anda di bawah ini:',
-      defaultValue: post.content,
-      confirmText: 'Simpan Perubahan'
-    });
-    if (!newContent || newContent === post.content) return;
+  // Format post date from created_at
+  const formatPostDate = (createdAt: string | null, fallbackDate?: string) => {
+    if (!createdAt) return fallbackDate || 'Baru saja';
+    const date = new Date(createdAt);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
 
+    if (diffMins < 1) return 'Baru saja';
+    if (diffMins < 60) return `${diffMins} menit lalu`;
+    if (diffHours < 24) return `${diffHours} jam lalu`;
+    if (diffDays < 7) return `${diffDays} hari lalu`;
+    return date.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  };
+
+  const handleEditPost = (post: any) => {
+    setEditingPost(post);
+    setEditPostContent(post.content);
+    setEditPostImagePreview(post.image || null);
+    setEditPostImageFile(null);
+  };
+
+  const handleSaveEditPost = async () => {
+    if (!editingPost) return;
+    setSavingEdit(true);
     try {
-      const { error } = await supabase.from('posts').update({ content: newContent }).eq('id', post.id);
+      let imageUrl = editingPost.image;
+      if (editPostImageFile) {
+        const fileExt = editPostImageFile.name.split('.').pop();
+        const fileName = `${crypto.randomUUID()}.${fileExt}`;
+        const { error: uploadError } = await supabase.storage.from('images').upload(fileName, editPostImageFile);
+        if (uploadError) throw uploadError;
+        const { data } = supabase.storage.from('images').getPublicUrl(fileName);
+        imageUrl = data.publicUrl;
+      }
+
+      const updatePayload: any = { content: editPostContent };
+      if (imageUrl !== editingPost.image) updatePayload.image = imageUrl;
+
+      const { error } = await supabase.from('posts').update(updatePayload).eq('id', editingPost.id);
       if (error) throw error;
-      setUserPosts(prev => prev.map(p => p.id === post.id ? { ...p, content: newContent } : p));
+      setUserPosts(prev => prev.map(p => p.id === editingPost.id ? { ...p, ...updatePayload } : p));
+      setEditingPost(null);
       await showModal({ type: 'alert', title: 'Berhasil', message: 'Postingan berhasil diedit!', confirmText: 'OK' });
     } catch (err: any) {
       await showModal({ type: 'alert', title: 'Gagal', message: 'Gagal mengedit postingan: ' + err.message, confirmText: 'Tutup', confirmColor: 'bg-rose-500' });
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  // Fetch comments for a specific post
+  const fetchPostComments = async (postId: string) => {
+    setLoadingPostComments(true);
+    try {
+      const { data, error } = await supabase
+        .from('post_comments')
+        .select('*')
+        .eq('post_id', postId)
+        .order('created_at', { ascending: true });
+      if (!error && data) {
+        setPostComments(data);
+      } else {
+        setPostComments([]);
+      }
+    } catch {
+      setPostComments([]);
+    } finally {
+      setLoadingPostComments(false);
+    }
+  };
+
+  const handlePostComment = async () => {
+    if (!commentText.trim() || !showPostComments || !userEmail) return;
+    setSubmittingComment(true);
+    try {
+      const authorName = userEmail.split('@')[0];
+      const { data, error } = await supabase.from('post_comments').insert({
+        post_id: showPostComments,
+        user_email: userEmail,
+        user_name: authorName,
+        content: commentText.trim()
+      }).select().single();
+
+      if (error) throw error;
+      setPostComments(prev => [...prev, data]);
+      setCommentText('');
+
+      // Update comment count
+      const post = userPosts.find(p => p.id === showPostComments);
+      if (post) {
+        const newCount = (post.comments || 0) + 1;
+        await supabase.from('posts').update({ comments: newCount }).eq('id', showPostComments);
+        setUserPosts(prev => prev.map(p => p.id === showPostComments ? { ...p, comments: newCount } : p));
+      }
+    } catch (err: any) {
+      console.error('Gagal menambahkan komentar:', err);
+    } finally {
+      setSubmittingComment(false);
     }
   };
 
@@ -1079,7 +1177,7 @@ export function ProfileScreen({ isDarkMode, onBack, userRole = 'user', userEmail
                           </span>
                         )}
                       </div>
-                      <p className="text-[10px] text-[#A8A29E] font-bold uppercase tracking-wider">{post.date}</p>
+                      <p className="text-[10px] text-[#A8A29E] font-bold uppercase tracking-wider">{formatPostDate(post.created_at, post.date)}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -1128,10 +1226,16 @@ export function ProfileScreen({ isDarkMode, onBack, userRole = 'user', userEmail
                         <Heart className="w-5 h-5" />
                         <span className="text-xs font-bold">{post.likes || 0}</span>
                       </div>
-                      <div className="flex items-center gap-2 text-[#78716C]">
+                      <button
+                        onClick={() => {
+                          setShowPostComments(post.id);
+                          fetchPostComments(post.id);
+                        }}
+                        className="flex items-center gap-2 text-[#78716C] hover:text-[#FF611D] transition-colors"
+                      >
                         <MessageCircle className="w-5 h-5" />
                         <span className="text-xs font-bold">{post.comments || 0}</span>
-                      </div>
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -1140,6 +1244,171 @@ export function ProfileScreen({ isDarkMode, onBack, userRole = 'user', userEmail
           </div>
         )}
       </div>
+
+      {/* Edit Post Full Screen */}
+      <AnimatePresence>
+        {editingPost && (
+          <motion.div
+            initial={{ opacity: 0, y: 50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 50 }}
+            className={`fixed inset-0 z-[200] flex flex-col ${isDarkMode ? 'bg-[#1C1917]' : 'bg-white'}`}
+          >
+            <div className={`p-4 flex items-center justify-between border-b mt-10 md:mt-0 ${isDarkMode ? 'border-[#404040]' : 'border-[#E7E5E4]'}`}>
+              <button onClick={() => setEditingPost(null)} className={`p-2 rounded-xl border transition-all ${isDarkMode ? 'bg-[#262626] border-[#404040] text-[#A8A29E]' : 'bg-white border-[#E7E5E4] text-[#78716C]'}`}>
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+              <h2 className={`text-lg font-black italic tracking-tighter ${isDarkMode ? 'text-white' : 'text-[#4B2E2A]'}`}>EDIT POSTINGAN</h2>
+              <button onClick={handleSaveEditPost} disabled={savingEdit} className={`font-black italic text-sm tracking-tighter ${savingEdit ? 'text-zinc-500' : 'text-[#FF611D]'}`}>
+                {savingEdit ? 'MENYIMPAN...' : 'SIMPAN'}
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              {/* Image Editor */}
+              <div className="space-y-2">
+                <label className={`text-[10px] font-black uppercase tracking-[0.2em] ${isDarkMode ? 'text-[#A8A29E]' : 'text-[#78716C]'}`}>Foto Postingan</label>
+                <div className={`w-full aspect-[4/3] rounded-2xl border-2 border-dashed flex items-center justify-center cursor-pointer transition-colors relative overflow-hidden ${
+                  isDarkMode ? 'bg-[#262626] border-[#404040]' : 'bg-[#F6F1EA] border-[#E7E5E4]'
+                }`}>
+                  {editPostImagePreview ? (
+                    <img src={editPostImagePreview} alt="Preview" className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="flex flex-col items-center gap-2 text-[#A8A29E]">
+                      <ImagePlus className="w-10 h-10" />
+                      <span className="text-xs font-bold">Pilih Foto</span>
+                    </div>
+                  )}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="absolute inset-0 opacity-0 cursor-pointer"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        setEditPostImageFile(file);
+                        const reader = new FileReader();
+                        reader.onload = () => setEditPostImagePreview(reader.result as string);
+                        reader.readAsDataURL(file);
+                      }
+                    }}
+                  />
+                  {editPostImagePreview && (
+                    <div className="absolute bottom-3 right-3 p-2.5 bg-[#FF611D] text-white rounded-xl shadow-lg border-2 border-white">
+                      <Camera className="w-5 h-5" />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Content Editor */}
+              <div className="space-y-2">
+                <label className={`text-[10px] font-black uppercase tracking-[0.2em] ${isDarkMode ? 'text-[#A8A29E]' : 'text-[#78716C]'}`}>Teks Postingan</label>
+                <textarea
+                  value={editPostContent}
+                  onChange={(e) => setEditPostContent(e.target.value)}
+                  className={`w-full min-h-[120px] rounded-2xl p-4 text-sm font-medium border focus:outline-none focus:border-[#FF611D] transition-colors resize-y ${isDarkMode ? 'bg-[#333333] border-[#404040] text-white' : 'bg-[#FAF9F6] border-[#E7E5E4] text-[#4B2E2A]'}`}
+                  placeholder="Tulis konten postingan..."
+                />
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Comment Bottom Sheet */}
+      <AnimatePresence>
+        {showPostComments && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[200] bg-black/60 flex items-end"
+            onClick={() => setShowPostComments(null)}
+          >
+            <motion.div
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className={`w-full rounded-t-3xl h-[75%] flex flex-col shadow-2xl ${isDarkMode ? 'bg-[#262626]' : 'bg-white'}`}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Sheet Header */}
+              <div className={`p-4 flex items-center justify-between border-b ${isDarkMode ? 'border-[#404040]' : 'border-[#E7E5E4]'}`}>
+                <div className="flex items-center gap-2">
+                  <h3 className={`text-lg font-bold ${isDarkMode ? 'text-white' : 'text-[#4B2E2A]'}`}>Komentar</h3>
+                  <span className={`px-2 py-0.5 rounded text-xs font-bold ${isDarkMode ? 'bg-[#333333] text-[#A8A29E]' : 'bg-[#F6F1EA] text-[#78716C]'}`}>
+                    {postComments.length}
+                  </span>
+                </div>
+                <button
+                  onClick={() => setShowPostComments(null)}
+                  className={`w-10 h-10 flex items-center justify-center rounded-full transition-colors ${isDarkMode ? 'bg-[#333333] text-[#78716C] hover:bg-[#404040]' : 'bg-[#F6F1EA] text-[#78716C] hover:bg-[#E7E5E4]'}`}
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Comments List */}
+              <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                {loadingPostComments ? (
+                  <div className="flex justify-center py-8">
+                    <div className="w-6 h-6 border-2 border-[#FF611D] border-t-transparent rounded-full animate-spin" />
+                  </div>
+                ) : postComments.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-center">
+                    <MessageCircle className={`w-10 h-10 mb-3 ${isDarkMode ? 'text-[#404040]' : 'text-[#E7E5E4]'}`} />
+                    <p className={`text-sm font-bold ${isDarkMode ? 'text-[#78716C]' : 'text-[#A8A29E]'}`}>Belum ada komentar</p>
+                    <p className={`text-xs mt-1 ${isDarkMode ? 'text-[#525252]' : 'text-[#D6D3D1]'}`}>Jadilah yang pertama berkomentar!</p>
+                  </div>
+                ) : (
+                  postComments.map((comment: any) => (
+                    <div key={comment.id} className="flex gap-3">
+                      <img
+                        src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${comment.user_name}`}
+                        alt=""
+                        className="w-8 h-8 rounded-full shrink-0"
+                      />
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className={`text-xs font-bold ${isDarkMode ? 'text-white' : 'text-[#4B2E2A]'}`}>{comment.user_name}</span>
+                          <span className="text-[10px] text-[#A8A29E]">{formatPostDate(comment.created_at)}</span>
+                        </div>
+                        <p className={`text-sm mt-0.5 ${isDarkMode ? 'text-[#D6D3D1]' : 'text-[#57534E]'}`}>{comment.content}</p>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {/* Comment Input */}
+              <div className={`p-4 border-t flex items-center gap-3 ${isDarkMode ? 'border-[#404040]' : 'border-[#E7E5E4]'}`}>
+                <input
+                  type="text"
+                  value={commentText}
+                  onChange={(e) => setCommentText(e.target.value)}
+                  placeholder="Tulis komentar..."
+                  className={`flex-1 h-11 rounded-xl px-4 text-sm font-medium border focus:outline-none focus:border-[#FF611D] transition-colors ${isDarkMode ? 'bg-[#333333] border-[#404040] text-white placeholder-[#78716C]' : 'bg-[#F6F1EA] border-[#E7E5E4] text-[#4B2E2A] placeholder-[#A8A29E]'}`}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handlePostComment();
+                    }
+                  }}
+                />
+                <button
+                  onClick={handlePostComment}
+                  disabled={!commentText.trim() || submittingComment}
+                  className={`w-11 h-11 rounded-xl flex items-center justify-center transition-all active:scale-90 ${commentText.trim() ? 'bg-[#FF611D] text-white' : isDarkMode ? 'bg-[#333333] text-[#78716C]' : 'bg-[#E7E5E4] text-[#A8A29E]'}`}
+                >
+                  <Send className="w-5 h-5" />
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 
