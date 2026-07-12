@@ -24,6 +24,26 @@ export function ProfileScreen({ isDarkMode, onBack, userRole = 'user', userEmail
     localStorage.setItem('user_tier', currentTier);
   }, [currentTier]);
 
+  useEffect(() => {
+    async function syncTier() {
+      if (!userEmail) return;
+      try {
+        const { data, error } = await supabase
+          .from('users_auth')
+          .select('tier')
+          .eq('email', userEmail)
+          .single();
+        if (!error && data && data.tier) {
+          setCurrentTier(data.tier as any);
+          localStorage.setItem('user_tier', data.tier);
+        }
+      } catch (err) {
+        console.error("Failed to sync tier with database:", err);
+      }
+    }
+    syncTier();
+  }, [userEmail]);
+
   const [popupAdConfig, setPopupAdConfig] = useState(() => {
     const saved = localStorage.getItem('pro_popup_ad');
     if (saved) {
