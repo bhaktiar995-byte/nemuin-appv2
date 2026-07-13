@@ -665,7 +665,7 @@ export function ProfileScreen({ isDarkMode, onBack, userRole = 'user', userEmail
 
         // 5. Sign out dari Supabase
         await supabase.auth.signOut();
-        
+
         // 6. Bersihkan data lokal
         localStorage.clear();
 
@@ -878,10 +878,12 @@ export function ProfileScreen({ isDarkMode, onBack, userRole = 'user', userEmail
                       {popupAdConfig.imageUrl ? (
                         <>
                           <img
+                            key={popupAdConfig.imageUrl}
                             src={popupAdConfig.imageUrl}
                             alt="Promo Preview"
                             className={`w-full h-full object-cover rounded-xl transition-all ${isUploadingPromo ? 'opacity-40 blur-sm' : ''}`}
                             onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                            onLoad={(e) => { (e.target as HTMLImageElement).style.display = 'block'; }}
                           />
                           <div className="absolute inset-0 bg-black/40 opacity-0 hover:opacity-100 flex items-center justify-center transition-opacity rounded-xl">
                             <span className="text-white text-xs font-black uppercase tracking-widest bg-black/60 px-4 py-2 rounded-xl">Ubah Gambar</span>
