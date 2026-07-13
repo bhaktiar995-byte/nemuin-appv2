@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowRight, Play, Star, MapPin, MessageSquare, RefreshCw, Flame, Search, List, Share2 } from 'lucide-react';
+import { ArrowRight, Play, Star, MapPin, MessageSquare, RefreshCw, Dices, Flame, Search, List, Share2 } from 'lucide-react';
 
 interface LandingScreenProps {
   onNavigateAuth: (mode: 'login' | 'register') => void;
@@ -69,7 +69,7 @@ export function LandingScreen({ onNavigateAuth, isDarkMode }: LandingScreenProps
             {[
               { icon: MapPin, text: '500+', sub: 'Tempat Makan' },
               { icon: Star, text: 'Review Asli', sub: 'Pengguna' },
-              { icon: RefreshCw, text: 'Lucky Spin', sub: 'Rekomendasi' },
+              { icon: Dices, text: 'Lucky Spin', sub: 'Rekomendasi' },
               { icon: Flame, text: 'Kuliner Viral', sub: 'Setiap Hari' }
             ].map((feature, idx) => (
               <div key={idx} className="flex items-center gap-2">
@@ -141,7 +141,7 @@ export function LandingScreen({ onNavigateAuth, isDarkMode }: LandingScreenProps
             {[
               { num: 1, icon: Search, title: 'Pencarian Instan', desc: 'Cari makanan atau restoran berdasarkan nama, kategori, atau lokasi terdekat.' },
               { num: 2, icon: List, title: 'Jelajahi Feeds', desc: 'Lihat postingan kuliner terbaru dari pengguna lain, rekomendasi tempat makan, makanan viral, dan promo menarik.' },
-              { num: 3, icon: RefreshCw, title: 'Lucky Spin Menu', desc: 'Bingung mau makan apa? Putar Lucky Spin untuk mendapatkan rekomendasi menu atau restoran secara acak.' },
+              { num: 3, icon: Dices, title: 'Lucky Spin Menu', desc: 'Bingung mau makan apa? Putar Lucky Spin untuk mendapatkan rekomendasi menu atau restoran secara acak.' },
               { num: 4, icon: MessageSquare, title: 'Review & Bagikan', desc: 'Berikan rating, ulasan, dan foto makananmu untuk membantu pengguna lain menemukan kuliner terbaik.' }
             ].map((step, idx) => (
               <div key={idx} className="relative z-10 flex flex-col items-center text-center">

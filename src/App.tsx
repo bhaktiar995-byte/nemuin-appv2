@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { Home, List as MenuIcon, MapPin, Compass, PlusCircle, User, UtensilsCrossed, RefreshCw, Search, Settings, Rss, X, SlidersHorizontal, Shield, Store, LogOut } from 'lucide-react';
+import { Home, List as MenuIcon, MapPin, Compass, PlusCircle, User, UtensilsCrossed, RefreshCw, Dices, Search, Settings, Rss, X, SlidersHorizontal, Shield, Store, LogOut } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { MapScreen } from './components/MapScreen';
 import { ListScreen } from './components/ListScreen';
@@ -552,7 +552,7 @@ export default function App() {
                     className="h-10 w-10 bg-[#FF611D] text-white rounded-2xl flex items-center justify-center shadow-lg active:scale-95 transition-all"
                     title="Lucky Spin"
                   >
-                    <RefreshCw className="w-5 h-5 animate-spin-slow" />
+                    <Dices className="w-5 h-5 animate-spin-slow" />
                   </button>
                 )}
                 {view === 'list' && currentUser?.role === 'user' && (
@@ -620,7 +620,7 @@ export default function App() {
                   onClick={() => setView('spin')}
                   className="hidden md:flex h-12 px-6 bg-[#FF611D] text-white rounded-2xl font-black italic tracking-tighter items-center gap-3 shadow-[0_8px_20px_rgba(255,97,29,0.3)] hover:scale-105 active:scale-95 transition-all whitespace-nowrap"
                 >
-                  <RefreshCw className="w-4 h-4 animate-spin-slow shrink-0" />
+                  <Dices className="w-4 h-4 animate-spin-slow shrink-0" />
                   <span>LUCKY SPIN</span>
                 </button>
               )}
